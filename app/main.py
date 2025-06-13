@@ -5,7 +5,7 @@ import os
 import shutil
 import json
 
-st.title("🏀 Análise de Arremesso no Basquete com IA")
+st.title("🏀 Análise de Arremesso no Basquete com IA ")
 
 # Criação de pasta temporária
 os.makedirs("app/videos", exist_ok=True)
