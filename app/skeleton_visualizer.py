@@ -1,4 +1,11 @@
-import cv2
+try:
+    import cv2
+except ImportError:
+    import sys
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "opencv-python-headless==4.8.1.78"])
+    import cv2
+
 import mediapipe as mp
 import numpy as np
 import streamlit as st
