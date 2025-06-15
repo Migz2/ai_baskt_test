@@ -11,6 +11,7 @@ from datetime import datetime
 import mediapipe as mp
 import cv2
 from body_analysis import analyze_body_parts, generate_insights
+import time
 
 def analyze_and_visualize(user_path, ref_path):
     # Verificar se os arquivos existem
@@ -24,62 +25,108 @@ def analyze_and_visualize(user_path, ref_path):
     
     # Inicializar MediaPipe Pose
     mp_pose = mp.solutions.pose
+    mp_drawing = mp.solutions.drawing_utils
     pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
     
     # Listas para armazenar keypoints
     user_keypoints = []
     ref_keypoints = []
     
-    # Processar vídeo do usuário
-    user_cap = cv2.VideoCapture(user_path)
-    if not user_cap.isOpened():
-        st.error("❌ Erro ao abrir o vídeo do usuário")
-        return
-        
-    while user_cap.isOpened():
-        ret, frame = user_cap.read()
-        if not ret:
-            break
-            
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(frame_rgb)
-        
-        if results.pose_landmarks:
-            frame_keypoints = []
-            for landmark in results.pose_landmarks.landmark:
-                frame_keypoints.append([landmark.x, landmark.y, landmark.z])
-            user_keypoints.append(frame_keypoints)
-        else:
-            # Se não detectar pose, adiciona zeros
-            frame_keypoints = [[0.0, 0.0, 0.0] for _ in range(33)]
-            user_keypoints.append(frame_keypoints)
-            
-    user_cap.release()
+    # Criar containers para os vídeos lado a lado
+    col1, col2 = st.columns(2)
+    with col1:
+        user_container = st.empty()
+    with col2:
+        ref_container = st.empty()
     
-    # Processar vídeo de referência
+    # Barra de progresso
+    progress_bar = st.progress(0)
+    
+    # Abrir os vídeos
+    user_cap = cv2.VideoCapture(user_path)
     ref_cap = cv2.VideoCapture(ref_path)
-    if not ref_cap.isOpened():
-        st.error("❌ Erro ao abrir o vídeo de referência")
+    
+    if not user_cap.isOpened() or not ref_cap.isOpened():
+        st.error("❌ Erro ao abrir um dos vídeos")
         return
+    
+    # Obter informações do vídeo de referência (usar como base)
+    total_frames = int(ref_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = ref_cap.get(cv2.CAP_PROP_FPS)
+    frame_delay = 1/fps if fps > 0 else 0.03  # Delay entre frames
+    
+    # Obter informações do vídeo do usuário
+    user_total_frames = int(user_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    frame_count = 0
+    while frame_count < total_frames:
+        # Ler frames dos dois vídeos
+        ret_user, user_frame = user_cap.read()
+        ret_ref, ref_frame = ref_cap.read()
         
-    while ref_cap.isOpened():
-        ret, frame = ref_cap.read()
-        if not ret:
+        if not ret_user or not ret_ref:
             break
             
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(frame_rgb)
+        # Converter frames para RGB
+        user_frame_rgb = cv2.cvtColor(user_frame, cv2.COLOR_BGR2RGB)
+        ref_frame_rgb = cv2.cvtColor(ref_frame, cv2.COLOR_BGR2RGB)
         
-        if results.pose_landmarks:
+        # Processar pose no frame do usuário
+        user_results = pose.process(user_frame_rgb)
+        if user_results.pose_landmarks:
             frame_keypoints = []
-            for landmark in results.pose_landmarks.landmark:
+            for landmark in user_results.pose_landmarks.landmark:
+                frame_keypoints.append([landmark.x, landmark.y, landmark.z])
+            user_keypoints.append(frame_keypoints)
+            
+            # Desenhar o esqueleto no frame do usuário
+            mp_drawing.draw_landmarks(
+                user_frame_rgb,
+                user_results.pose_landmarks,
+                mp_pose.POSE_CONNECTIONS,
+                mp_drawing.DrawingSpec(color=(245,117,66), thickness=2, circle_radius=2),
+                mp_drawing.DrawingSpec(color=(245,66,230), thickness=2, circle_radius=2)
+            )
+        else:
+            frame_keypoints = [[0.0, 0.0, 0.0] for _ in range(33)]
+            user_keypoints.append(frame_keypoints)
+        
+        # Processar pose no frame de referência
+        ref_results = pose.process(ref_frame_rgb)
+        if ref_results.pose_landmarks:
+            frame_keypoints = []
+            for landmark in ref_results.pose_landmarks.landmark:
                 frame_keypoints.append([landmark.x, landmark.y, landmark.z])
             ref_keypoints.append(frame_keypoints)
+            
+            # Desenhar o esqueleto no frame de referência
+            mp_drawing.draw_landmarks(
+                ref_frame_rgb,
+                ref_results.pose_landmarks,
+                mp_pose.POSE_CONNECTIONS,
+                mp_drawing.DrawingSpec(color=(245,117,66), thickness=4, circle_radius=4),
+                mp_drawing.DrawingSpec(color=(245,66,230), thickness=4, circle_radius=4)
+            )
         else:
-            # Se não detectar pose, adiciona zeros
             frame_keypoints = [[0.0, 0.0, 0.0] for _ in range(33)]
             ref_keypoints.append(frame_keypoints)
-            
+        
+        # Atualizar os containers com os frames atuais
+        with col1:
+            user_container.image(user_frame_rgb, channels="RGB", use_container_width=True)
+        with col2:
+            ref_container.image(ref_frame_rgb, channels="RGB", use_container_width=True)
+        
+        # Atualizar a barra de progresso
+        frame_count += 1
+        progress = frame_count / total_frames
+        progress_bar.progress(progress)
+        
+        # Pequeno delay para simular tempo real
+        time.sleep(frame_delay)
+    
+    # Liberar recursos
+    user_cap.release()
     ref_cap.release()
     pose.close()
     
@@ -124,8 +171,12 @@ def analyze_and_visualize(user_path, ref_path):
         st.warning("⚠️ Não foi possível calcular o score: dados inválidos.")
         return
     
+    # Definir um fator de normalização para a diferença
+    MAX_EXPECTED_DIFFERENCE = 1.0 # Ajuste este valor conforme a sensibilidade desejada (ex: 1.0 é um bom ponto de partida)
+
     # Converter diferença em semelhança (quanto menor a diferença, maior a semelhança)
-    similarity = 1.0 - difference
+    # Normaliza a diferença e garante que a similaridade esteja entre 0 e 1
+    similarity = max(0, 1.0 - (difference / MAX_EXPECTED_DIFFERENCE))
     
     # Converter para percentual inteiro
     score_percentual = int(similarity * 100)
@@ -138,9 +189,6 @@ def analyze_and_visualize(user_path, ref_path):
     
     # Gerar insights
     insights = generate_insights(part_errors)
-    
-    # Renderizar vídeos com esqueletos
-    render_side_by_side_with_skeletons(user_path, ref_path)
     
     # Exibir insights (alertas de correção)
     if insights:
@@ -241,39 +289,32 @@ if page == "Análise de Movimento":
     # Upload do vídeo
     uploaded_file = st.file_uploader("Faça upload do seu vídeo", type=["mp4", "mov"])
     
-    # Definir caminho do vídeo de referência
-    ref_video = os.path.join("app", "videos", "ref.mp4")
+    # Definir caminho do vídeo de referência (usado tanto para upload quanto para vídeo teste)
+    ref_video_path = os.path.join("app", "videos", "ref.mp4")
     
     if uploaded_file is not None:
         # Criar pasta temporária se não existir
         os.makedirs("temp", exist_ok=True)
         
-        # Salvar o vídeo
+        # Salvar o vídeo do usuário
         user_path = os.path.join("temp", "user_video.mp4")
         with open(user_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         
-        # Mensagem informativa
         st.info("🎥 Gerando a Análise... ")
-        
-        # Analisar e visualizar
-        analyze_and_visualize(user_path, ref_video)
+        analyze_and_visualize(user_path, ref_video_path)
     else:
         st.info("📝 Não tem um vídeo para enviar? Use o vídeo de teste abaixo!")
         
         # Botão para usar vídeo de teste
         if st.button("🎥 Usar Vídeo Teste"):
-            # Definir caminho do vídeo de teste
-            test_video = os.path.join("app", "videos", "user.mp4")
+            test_user_video_path = os.path.join("app", "videos", "user.mp4")
             
-            if os.path.exists(test_video):
-                # Mensagem informativa
+            if os.path.exists(test_user_video_path):
                 st.info("🎥 Gerando a Análise com Vídeo Teste... ")
-                
-                # Analisar e visualizar
-                analyze_and_visualize(test_video, ref_video)
+                analyze_and_visualize(test_user_video_path, ref_video_path)
             else:
-                st.error("❌ Vídeo de teste não encontrado!")
+                st.error("❌ Vídeo de teste (user.mp4) não encontrado na pasta app/videos!")
 
 elif page == "Histórico de Análises":
     display_analysis_history()
