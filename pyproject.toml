@@ -1,0 +1,18 @@
+[project]
+name = "ai-baskt-test"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib>=3.10.3",
+    "mediapipe>=0.10.21",
+    "numpy>=1.26.4",
+    "opencv-python>=4.11.0.86",
+    "pandas>=2.3.0",
+    "streamlit>=1.45.1",
+    "cvzone>=1.6.1",
+    "pillow>=11.2.1",
+    "scipy>=1.15.3",
+]
+
