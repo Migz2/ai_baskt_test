@@ -1,25 +1,16 @@
 import json
 import os
-from datetime import datetime
 
-HISTORY_FILE = "app/data/history.json"
+HIST_PATH = "history.json"
 
-def save_analysis_result(score, user_video, ref_video):
-    result = {
-        "score": int(round(score)),
-        "user_video": os.path.basename(user_video),
-        "ref_video": os.path.basename(ref_video),
-        "timestamp": datetime.now().isoformat()
-    }
-
+def save_analysis_result(result):
     history = load_history()
     history.append(result)
-
-    with open(HISTORY_FILE, "w") as f:
-        json.dump(history, f, indent=2)
+    with open(HIST_PATH, "w") as f:
+        json.dump(history, f)
 
 def load_history():
-    if not os.path.exists(HISTORY_FILE):
+    if not os.path.exists(HIST_PATH):
         return []
-    with open(HISTORY_FILE, "r") as f:
+    with open(HIST_PATH, "r") as f:
         return json.load(f)

@@ -1,19 +1,16 @@
 import matplotlib.pyplot as plt
-import io
-from PIL import Image
 import streamlit as st
 
-def plot_difference_graph(differences):
-    fig, ax = plt.subplots()
-    ax.plot(differences, label='Diferença por frame')
-    ax.set_xlabel('Frame')
-    ax.set_ylabel('Diferença')
-    ax.set_title('Evolução da Diferença')
-    ax.legend()
+def plot_difference_graph(difference_lists):
+    fig, ax = plt.subplots(figsize=(10, 5))
 
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png")
-    buf.seek(0)
-    image = Image.open(buf)
-    st.image(image)
-    return image
+    for i, valores in enumerate(difference_lists):
+        ax.plot(valores, label=f"Parte {i+1}")
+
+    ax.set_title("Diferença de movimento por parte do corpo")
+    ax.set_xlabel("Frame")
+    ax.set_ylabel("Diferença (score)")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+

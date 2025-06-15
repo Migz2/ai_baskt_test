@@ -1,41 +1,52 @@
 import streamlit as st
-import os
-import numpy as np
-from datetime import datetime
-from app.scripts.upload import handle_upload
+from app.scripts.extract_pose import extrair_keypoints
+from app.scripts.analysis import calcular_similaridade_por_partes
+from app.scripts.compare_pose import gerar_dicas
+from app.scripts.visual_side_by_side import gerar_visualizacao_com_sobreposicao
 from app.scripts.history import save_analysis_result, load_history
-from app.core.analysis import calculate_similarity
-from app.core.extract_pose import extract_keypoints
-from app.scripts.compare_keypoints_visual import plot_difference_graph
+import numpy as np
 
-st.set_page_config(page_title="Análise de Movimento", layout="wide")
-st.title("🎾 Análise de Performance com IA")
+st.set_page_config(layout="wide")
+st.title("🏀 Análise de Arremesso no Basquete com IA")
 
-st.markdown("Faça o upload de dois vídeos: um **seu** e um **de referência**.")
+col1, col2 = st.columns(2)
+with col1:
+    video_user = st.file_uploader("Envie seu vídeo", type=["mp4", "mov"], key="user")
+with col2:
+    video_ref = st.file_uploader("Vídeo de Referência", type=["mp4", "mov"], key="ref")
 
-user_video = st.file_uploader("📤 Seu vídeo", type=["mp4"], key="user")
-ref_video = st.file_uploader("📥 Vídeo de referência", type=["mp4"], key="ref")
-user_name = st.text_input("👤 Nome do usuário para histórico")
+if video_user and video_ref:
+    with st.spinner("Extraindo poses dos vídeos..."):
+        keypoints_user = extrair_keypoints(video_user)
+        keypoints_ref = extrair_keypoints(video_ref)
 
-if user_video and ref_video and user_name:
-    if st.button("🔍 Analisar movimento"):
-        user_path, ref_path = handle_upload(user_video, ref_video)
+    with st.spinner("Calculando similaridade por partes do corpo..."):
+        por_partes = calcular_similaridade_por_partes(keypoints_user, keypoints_ref)
+        final_score = int(np.nan_to_num(np.mean([v for v in por_partes.values()])) * 100)
 
-        user_json, ref_json = extract_keypoints(user_path, ref_path)
-        similarity_list = calculate_similarity(user_json, ref_json)
-        plot_difference_graph(similarity_list)
+    with st.spinner("Gerando dicas personalizadas..."):
+        dicas = gerar_dicas(keypoints_user, keypoints_ref)
 
-        final_score = np.mean(similarity_list) * 100
-        st.success(f"Score final: {round(final_score)}%")
+    with st.spinner("Visualizando vídeos com esqueletos sobrepostos..."):
+        path_output = gerar_visualizacao_com_sobreposicao(video_user, video_ref)
 
-        save_analysis_result(final_score, user_path, ref_path)
+    st.success("✅ Análise Concluída")
+    st.video(path_output)
+
+    st.markdown(f"### 🎯 Pontuação Final: `{final_score} / 100`")
+    st.markdown("---")
+    st.markdown("### 💡 Dicas para Melhorar:")
+    for dica in dicas:
+        st.write("•", dica)
+
+    save_analysis_result({
+        "pontuacao": final_score,
+        "dicas": dicas,
+        "partes": por_partes
+    })
 
 st.markdown("---")
-with st.expander("📊 Histórico de Análises"):
-    history = load_history()
-    if history:
-        st.subheader("Histórico de Análises")
-        for item in reversed(history[-10:]):
-            st.markdown(f"**{item['timestamp']}** - Resultado: {int(round(item['score']))}/100")
-            st.markdown(f"🎥 Usuário: `{item['user_video']}`  |  Referência: `{item['ref_video']}`")
-            st.markdown("---")
+st.markdown("## 📈 Histórico de Análises")
+historico = load_history()
+for i, h in enumerate(historico[::-1]):
+    st.write(f"{i+1}. Pontuação: {h['pontuacao']} - Dicas: {', '.join(h['dicas'])}")
