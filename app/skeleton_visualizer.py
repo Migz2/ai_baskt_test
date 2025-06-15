@@ -21,7 +21,7 @@ def draw_skeleton_on_video(video_path):
     processed_frames = []
     
     # Inicializar MediaPipe Pose
-    with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+    with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.1, min_tracking_confidence=0.1) as pose:
         while cap.isOpened():
             # Ler frame
             ret, frame = cap.read()
@@ -40,7 +40,7 @@ def draw_skeleton_on_video(video_path):
                 # Desenhar pontos
                 for lm in results.pose_landmarks.landmark:
                     cx, cy = int(lm.x * w), int(lm.y * h)
-                    cv2.circle(frame, (cx, cy), 4, (0, 255, 0), -1)
+                    cv2.circle(frame, (cx, cy), 4, (245, 117, 66), -1)
                 # Desenhar conexões
                 for connection in POSE_CONNECTIONS:
                     start_idx, end_idx = connection
@@ -48,7 +48,7 @@ def draw_skeleton_on_video(video_path):
                     end = results.pose_landmarks.landmark[end_idx]
                     x1, y1 = int(start.x * w), int(start.y * h)
                     x2, y2 = int(end.x * w), int(end.y * h)
-                    cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                    cv2.line(frame, (x1, y1), (x2, y2), (245, 66, 230), 4)
             
             # Adicionar frame processado à lista
             processed_frames.append(frame.copy())
@@ -83,7 +83,7 @@ def render_side_by_side_with_skeletons(user_path, ref_path):
         ref_frame = cv2.resize(ref_frame, (int(ref_frame.shape[1] * height/ref_frame.shape[0]), height))
         
         # Juntar frames horizontalmente
-        combined_frame = np.hstack((ref_frame, user_frame))
+        combined_frame = np.hstack((user_frame, ref_frame))
         
         # Converter para PIL Image
         pil_image = Image.fromarray(combined_frame)
@@ -115,7 +115,7 @@ def render_side_by_side(user_video, reference_video):
         ref_frame = cv2.resize(ref_frame, (int(ref_frame.shape[1] * height/ref_frame.shape[0]), height))
         
         # Juntar frames horizontalmente
-        combined_frame = np.hstack((ref_frame, user_frame))
+        combined_frame = np.hstack((user_frame, ref_frame))
         
         # Exibir frame combinado
         frame_placeholder.image(combined_frame, channels="RGB")

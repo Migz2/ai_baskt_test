@@ -131,7 +131,7 @@ def analyze_and_visualize(user_path, ref_path):
     score_percentual = int(similarity * 100)
     
     # Exibir score
-    st.subheader(f"Score de Semelhança: {score_percentual}")
+    st.subheader(f"Score de Semelhança: {score_percentual}/100") 
     
     # Analisar partes do corpo
     part_errors = analyze_body_parts(user_keypoints, ref_keypoints)
@@ -197,25 +197,32 @@ def display_analysis_history():
         if os.path.exists(json_path):
             with open(json_path, "r") as f:
                 analysis = json.load(f)
-                
-            # Criar um expander para cada análise
             with st.expander(f"Análise de {folder}"):
                 # Exibir score
-                st.metric("Score de Semelhança", f"{analysis['score']}%")
+                st.metric("Score de Semelhança", f"{analysis['score']}", "/100")
                 
                 # Exibir insights se existirem
-                if "insights" in analysis and analysis["insights"]:
-                    st.subheader("📝 Dicas para Melhorar")
-                    for tip_message in analysis["insights"]:
-                        st.info(tip_message)
+                if analysis.get("insights"):
+                    st.subheader("Dicas de Melhoria:")
+                    for insight in analysis["insights"]:
+                        st.write(f"- {insight}")
+                else:
+                    st.info("Nenhuma dica de melhoria disponível para esta análise.")
                 
-                # Exibir vídeos lado a lado
-                user_video = os.path.join(folder_path, "user.mp4")
-                ref_video = os.path.join(folder_path, "ref.mp4")
+                # Exibir vídeos (opcional, se quiser reexibir no histórico)
+                user_hist_video_path = os.path.join(folder_path, "user.mp4")
+                ref_hist_video_path = os.path.join(folder_path, "ref.mp4")
                 
-                if os.path.exists(user_video) and os.path.exists(ref_video):
-                    render_side_by_side_with_skeletons(user_video, ref_video)
-
+                if os.path.exists(user_hist_video_path) and os.path.exists(ref_hist_video_path):
+                    st.subheader("Vídeos da Análise:")
+                    col_hist1, col_hist2 = st.columns(2)
+                    with col_hist1:
+                        st.video(user_hist_video_path)
+                        st.caption("Seu Vídeo")
+                    with col_hist2:
+                        st.video(ref_hist_video_path)
+                        st.caption("Vídeo de Referência")
+                        
 # Configuração da página
 st.set_page_config(
     page_title="Análise de Movimento",
@@ -234,6 +241,9 @@ if page == "Análise de Movimento":
     # Upload do vídeo
     uploaded_file = st.file_uploader("Faça upload do seu vídeo", type=["mp4", "mov"])
     
+    # Definir caminho do vídeo de referência
+    ref_video = os.path.join("app", "videos", "ref.mp4")
+    
     if uploaded_file is not None:
         # Criar pasta temporária se não existir
         os.makedirs("temp", exist_ok=True)
@@ -243,14 +253,27 @@ if page == "Análise de Movimento":
         with open(user_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         
-        # Definir caminho do vídeo de referência
-        ref_video = os.path.join("app", "videos", "ref.mp4")
-        
         # Mensagem informativa
         st.info("🎥 Gerando a Análise... ")
         
         # Analisar e visualizar
         analyze_and_visualize(user_path, ref_video)
+    else:
+        st.info("📝 Não tem um vídeo para enviar? Use o vídeo de teste abaixo!")
         
+        # Botão para usar vídeo de teste
+        if st.button("🎥 Usar Vídeo Teste"):
+            # Definir caminho do vídeo de teste
+            test_video = os.path.join("app", "videos", "user.mp4")
+            
+            if os.path.exists(test_video):
+                # Mensagem informativa
+                st.info("🎥 Gerando a Análise com Vídeo Teste... ")
+                
+                # Analisar e visualizar
+                analyze_and_visualize(test_video, ref_video)
+            else:
+                st.error("❌ Vídeo de teste não encontrado!")
+
 elif page == "Histórico de Análises":
     display_analysis_history()
