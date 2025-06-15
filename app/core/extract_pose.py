@@ -1,61 +1,49 @@
 import cv2
 import mediapipe as mp
 import json
-import os
 
 mp_pose = mp.solutions.pose
 
-def extract_keypoints_from_video(video_path, output_json_path):
-    # Garante que o diretório do JSON exista
-    os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
-
-    # Inicializa o modelo de pose
-    pose = mp_pose.Pose(
-        static_image_mode=True,  # útil para garantir detecção em cada frame
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5
-    )
-
+def extract_pose_from_video(video_path, output_json_path):
+    pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
     cap = cv2.VideoCapture(video_path)
-    frame_count = 0
+
     keypoints_data = []
+    frame_idx = 0
 
     while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
+        success, frame = cap.read()
+        if not success:
             break
 
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(frame_rgb)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = pose.process(frame)
 
-        # Exibe o frame na tela para debug
-        cv2.imshow("Frame", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        frame_keypoints = {}
 
         if results.pose_landmarks:
-            landmarks = []
-            for lm in results.pose_landmarks.landmark:
-                landmarks.append({
-                    'x': lm.x,
-                    'y': lm.y,
-                    'z': lm.z,
-                    'visibility': lm.visibility
-                })
-            keypoints_data.append({
-                'frame': frame_count,
-                'landmarks': landmarks
-            })
-            print(f"[DEBUG] Keypoints detectados no frame {frame_count}")
-        else:
-            print(f"[DEBUG] Nenhum keypoint detectado no frame {frame_count}")
+            for i, landmark in enumerate(results.pose_landmarks.landmark):
+                frame_keypoints[str(i)] = {
+                    "x": landmark.x,
+                    "y": landmark.y,
+                    "z": landmark.z,
+                    "visibility": landmark.visibility
+                }
 
-        frame_count += 1
+        keypoints_data.append({
+            "frame": frame_idx,
+            "keypoints": frame_keypoints
+        })
+        frame_idx += 1
 
     cap.release()
-    cv2.destroyAllWindows()
 
     with open(output_json_path, 'w') as f:
-        json.dump(keypoints_data, f, indent=4)
+        json.dump(keypoints_data, f)
 
-    print(f"[INFO] Keypoints salvos em: {output_json_path}")
+    return keypoints_data
+
+def extract_keypoints(user_path, ref_path):
+    user_json = extract_pose_from_video(user_path, "app/data/user_keypoints.json")
+    ref_json = extract_pose_from_video(ref_path, "app/data/ref_keypoints.json")
+    return {"keypoints": user_json}, {"keypoints": ref_json}

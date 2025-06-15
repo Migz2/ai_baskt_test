@@ -1,0 +1,26 @@
+[
+  {
+    "score": 27,
+    "user_video": "user.mp4",
+    "ref_video": "ref.mp4",
+    "timestamp": "2025-06-15T01:13:24.568873"
+  },
+  {
+    "score": 27,
+    "user_video": "user.mp4",
+    "ref_video": "ref.mp4",
+    "timestamp": "2025-06-15T01:14:46.847178"
+  },
+  {
+    "score": 30,
+    "user_video": "user.mp4",
+    "ref_video": "ref.mp4",
+    "timestamp": "2025-06-15T01:25:28.963431"
+  },
+  {
+    "score": 30,
+    "user_video": "user.mp4",
+    "ref_video": "ref.mp4",
+    "timestamp": "2025-06-15T01:36:46.506199"
+  }
+]
