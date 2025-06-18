@@ -14,62 +14,86 @@ FEEDBACK_MESSAGES = {
     "ombro_direito": [
         "Seu ombro direito está muito elevado durante o arremesso.",
         "Tente manter o ombro direito mais alinhado com o corpo.",
-        "O ombro direito está muito tenso, relaxe um pouco mais."
+        "O ombro direito está muito tenso, relaxe um pouco mais.",
+        "Mantenha o ombro direito mais estável durante todo o movimento.",
+        "O ombro direito está muito baixo, eleve-o um pouco mais."
     ],
     "ombro_esquerdo": [
         "O ombro esquerdo está muito baixo, tente elevá-lo um pouco.",
         "Mantenha o ombro esquerdo mais estável durante o movimento.",
-        "O ombro esquerdo está muito relaxado, mantenha-o firme."
+        "O ombro esquerdo está muito relaxado, mantenha-o firme.",
+        "O ombro esquerdo está muito tenso, relaxe um pouco mais.",
+        "Mantenha o ombro esquerdo alinhado com o ombro direito."
     ],
     "cotovelo_direito": [
         "Seu cotovelo direito está muito aberto durante o arremesso.",
         "Tente manter o cotovelo direito mais próximo do corpo.",
-        "O cotovelo direito está muito flexionado, ajuste o ângulo."
+        "O cotovelo direito está muito flexionado, ajuste o ângulo.",
+        "Mantenha o cotovelo direito mais estável durante o movimento.",
+        "O cotovelo direito está muito fechado, abra um pouco mais."
     ],
     "cotovelo_esquerdo": [
         "O cotovelo esquerdo está muito fechado, abra um pouco mais.",
         "Mantenha o cotovelo esquerdo mais estável durante o movimento.",
-        "O cotovelo esquerdo está muito relaxado, mantenha-o firme."
+        "O cotovelo esquerdo está muito relaxado, mantenha-o firme.",
+        "O cotovelo esquerdo está muito aberto, feche um pouco mais.",
+        "Mantenha o cotovelo esquerdo alinhado com o ombro."
     ],
     "punho_direito": [
         "Seu punho direito está muito flexionado no final do arremesso.",
         "Tente manter o punho direito mais firme durante o movimento.",
-        "O punho direito está muito solto, mantenha-o mais controlado."
+        "O punho direito está muito solto, mantenha-o mais controlado.",
+        "Mantenha o punho direito mais estável durante todo o movimento.",
+        "O punho direito está muito tenso, relaxe um pouco mais."
     ],
     "punho_esquerdo": [
         "O punho esquerdo está muito tenso, relaxe um pouco mais.",
         "Mantenha o punho esquerdo mais estável durante o movimento.",
-        "O punho esquerdo está muito flexionado, ajuste a posição."
+        "O punho esquerdo está muito flexionado, ajuste a posição.",
+        "O punho esquerdo está muito solto, mantenha-o mais controlado.",
+        "Mantenha o punho esquerdo alinhado com o cotovelo."
     ],
     "quadril": [
         "Seu quadril está muito inclinado durante o arremesso.",
         "Tente manter o quadril mais alinhado com o corpo.",
-        "O quadril está muito tenso, relaxe um pouco mais."
+        "O quadril está muito tenso, relaxe um pouco mais.",
+        "Mantenha o quadril mais estável durante todo o movimento.",
+        "O quadril está muito baixo, eleve-o um pouco mais."
     ],
     "joelho_direito": [
         "Seu joelho direito está muito flexionado durante o arremesso.",
         "Tente manter o joelho direito mais estável.",
-        "O joelho direito está muito tenso, relaxe um pouco mais."
+        "O joelho direito está muito tenso, relaxe um pouco mais.",
+        "Mantenha o joelho direito alinhado com o tornozelo.",
+        "O joelho direito está muito estendido, flexione um pouco mais."
     ],
     "joelho_esquerdo": [
         "O joelho esquerdo está muito estendido, flexione um pouco mais.",
         "Mantenha o joelho esquerdo mais estável durante o movimento.",
-        "O joelho esquerdo está muito relaxado, mantenha-o firme."
+        "O joelho esquerdo está muito relaxado, mantenha-o firme.",
+        "O joelho esquerdo está muito flexionado, estenda um pouco mais.",
+        "Mantenha o joelho esquerdo alinhado com o tornozelo."
     ],
     "tornozelo_direito": [
         "Seu tornozelo direito está muito instável durante o arremesso.",
         "Tente manter o tornozelo direito mais firme.",
-        "O tornozelo direito está muito tenso, relaxe um pouco mais."
+        "O tornozelo direito está muito tenso, relaxe um pouco mais.",
+        "Mantenha o tornozelo direito mais estável durante todo o movimento.",
+        "O tornozelo direito está muito flexionado, ajuste a posição."
     ],
     "tornozelo_esquerdo": [
         "O tornozelo esquerdo está muito instável, mantenha-o mais firme.",
         "Mantenha o tornozelo esquerdo mais estável durante o movimento.",
-        "O tornozelo esquerdo está muito relaxado, mantenha-o firme."
+        "O tornozelo esquerdo está muito relaxado, mantenha-o firme.",
+        "O tornozelo esquerdo está muito flexionado, ajuste a posição.",
+        "Mantenha o tornozelo esquerdo alinhado com o joelho."
     ],
     "tronco": [
         "Seu tronco está muito inclinado durante o arremesso.",
         "Tente manter o tronco mais ereto e estável.",
-        "O tronco está muito tenso, relaxe um pouco mais."
+        "O tronco está muito tenso, relaxe um pouco mais.",
+        "Mantenha o tronco mais estável durante todo o movimento.",
+        "O tronco está muito curvado, endireite um pouco mais."
     ]
 }
 
@@ -80,7 +104,13 @@ CORRECTION_ALERTS = {
     "cotovelo_direito": "Corrija o cotovelo direito... Mantendo-o mais alinhado você garante precisão no arremesso.",
     "cotovelo_esquerdo": "Corrija o cotovelo esquerdo... Mantendo-o mais alinhado você garante precisão no arremesso.",
     "punho_direito": "Corrija o punho direito... Mantendo-o mais controlado você melhora o efeito da bola e a trajetória.",
-    "punho_esquerdo": "Corrija o punho esquerdo... Mantendo-o mais controlado você melhora o efeito da bola e a trajetória."
+    "punho_esquerdo": "Corrija o punho esquerdo... Mantendo-o mais controlado você melhora o efeito da bola e a trajetória.",
+    "joelho_direito": "Corrija a flexão do joelho direito... Isso melhora sua estabilidade e força no arremesso.",
+    "joelho_esquerdo": "Corrija a flexão do joelho esquerdo... Isso melhora sua estabilidade e força no arremesso.",
+    "tornozelo_direito": "Corrija a estabilidade do tornozelo direito... Isso melhora seu equilíbrio durante o movimento.",
+    "tornozelo_esquerdo": "Corrija a estabilidade do tornozelo esquerdo... Isso melhora seu equilíbrio durante o movimento.",
+    "ombro_direito": "Corrija a posição do ombro direito... Isso melhora a mecânica do seu arremesso.",
+    "ombro_esquerdo": "Corrija a posição do ombro esquerdo... Isso melhora a mecânica do seu arremesso."
 }
 
 def calculate_part_error(user_keypoints, ref_keypoints, part_keypoints):

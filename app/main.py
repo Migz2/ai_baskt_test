@@ -315,133 +315,61 @@ def calculate_similarity(user_keypoints, ref_keypoints):
     
     return score_percentual
 
-def analyze_and_visualize(user_path, ref_path):
-    # Verificar se os arquivos existem
-    if not os.path.exists(user_path):
-        st.error(f"❌ Vídeo do usuário não encontrado: {user_path}")
-        return
-        
-    if not os.path.exists(ref_path):
-        st.error(f"❌ Vídeo de referência não encontrado: {ref_path}")
-        return
-    
-    # Inicializar MediaPipe Pose
-    mp_pose = mp.solutions.pose
-    mp_drawing = mp.solutions.drawing_utils
-    pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
-    
-    # Listas para armazenar keypoints
-    user_keypoints = []
-    ref_keypoints = []
-    
-    # Criar containers para os vídeos lado a lado
-    col1, col2 = st.columns(2)
-    with col1:
-        user_container = st.empty()
-    with col2:
-        ref_container = st.empty()
-    
-    # Barra de progresso
-    progress_bar = st.progress(0)
-    
-    # Abrir os vídeos
-    user_cap = cv2.VideoCapture(user_path)
-    ref_cap = cv2.VideoCapture(ref_path)
-    
-    if not user_cap.isOpened() or not ref_cap.isOpened():
-        st.error("❌ Erro ao abrir um dos vídeos")
-        return
-    
-    # Obter informações do vídeo de referência (usar como base)
-    total_frames = int(ref_cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = ref_cap.get(cv2.CAP_PROP_FPS)
-    frame_delay = 1/fps if fps > 0 else 0.03  # Delay entre frames
-    
-    frame_count = 0
-    while frame_count < total_frames:
-        # Ler frames dos dois vídeos
-        ret_user, user_frame = user_cap.read()
-        ret_ref, ref_frame = ref_cap.read()
-        
-        if not ret_user or not ret_ref:
-            break
-            
-        # Converter frames para RGB
-        user_frame_rgb = cv2.cvtColor(user_frame, cv2.COLOR_BGR2RGB)
-        ref_frame_rgb = cv2.cvtColor(ref_frame, cv2.COLOR_BGR2RGB)
-        
-        # Processar pose no frame do usuário
-        user_results = pose.process(user_frame_rgb)
-        if user_results.pose_landmarks:
-            frame_keypoints = []
-            for landmark in user_results.pose_landmarks.landmark:
-                frame_keypoints.append([landmark.x, landmark.y, landmark.z])
-            user_keypoints.append(frame_keypoints)
-            
-            # Desenhar o esqueleto no frame do usuário
-            mp_drawing.draw_landmarks(
-                user_frame_rgb,
-                user_results.pose_landmarks,
-                mp_pose.POSE_CONNECTIONS,
-                mp_drawing.DrawingSpec(color=(245,117,66), thickness=2, circle_radius=2),
-                mp_drawing.DrawingSpec(color=(245,66,230), thickness=2, circle_radius=2)
-            )
-        else:
-            frame_keypoints = [[0.0, 0.0, 0.0] for _ in range(33)]
-            user_keypoints.append(frame_keypoints)
-        
-        # Processar pose no frame de referência
-        ref_results = pose.process(ref_frame_rgb)
-        if ref_results.pose_landmarks:
-            frame_keypoints = []
-            for landmark in ref_results.pose_landmarks.landmark:
-                frame_keypoints.append([landmark.x, landmark.y, landmark.z])
-            ref_keypoints.append(frame_keypoints)
-            
-            # Desenhar o esqueleto no frame de referência
-            mp_drawing.draw_landmarks(
-                ref_frame_rgb,
-                ref_results.pose_landmarks,
-                mp_pose.POSE_CONNECTIONS,
-                mp_drawing.DrawingSpec(color=(245,117,66), thickness=4, circle_radius=4),
-                mp_drawing.DrawingSpec(color=(245,66,230), thickness=4, circle_radius=4)
-            )
-        else:
-            frame_keypoints = [[0.0, 0.0, 0.0] for _ in range(33)]
-            ref_keypoints.append(frame_keypoints)
-        
-        # Atualizar os containers com os frames atuais
-        with col1:
-            user_container.image(user_frame_rgb, channels="RGB", use_container_width=True)
-        with col2:
-            ref_container.image(ref_frame_rgb, channels="RGB", use_container_width=True)
-        
-        # Atualizar a barra de progresso
-        frame_count += 1
-        progress = frame_count / total_frames
-        progress_bar.progress(progress)
-        
-        # Pequeno delay para simular tempo real
-        time.sleep(frame_delay)
-    
-    # Liberar recursos
-    user_cap.release()
-    ref_cap.release()
-    pose.close()
-    
-    # Converter para arrays numpy
-    user_keypoints = np.array(user_keypoints)
-    ref_keypoints = np.array(ref_keypoints)
-    
-    # Verificação de keypoints vazios
-    if len(user_keypoints) == 0 or len(ref_keypoints) == 0:
-        st.warning("⚠️ Não foi possível extrair os keypoints de um dos vídeos.")
-        return
+def save_analysis(data):
+    """
+    Salva os dados da análise em um arquivo JSON na pasta de resultados.
+    """
+    results_dir = os.path.join("app", "results")
+    os.makedirs(results_dir, exist_ok=True)
+    filename = f"analysis_{data['nome_usuario']}_{data['data'].replace(':', '-').replace(' ', '_')}.json"
+    filepath = os.path.join(results_dir, filename)
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return filepath
 
-    # Verificação de formato
-    if user_keypoints.shape[1] != 33 or ref_keypoints.shape[1] != 33:
-        st.warning("⚠️ Estrutura inválida nos keypoints extraídos.")
-        return
+def extract_keypoints(video_path):
+    """
+    Extrai os keypoints de todos os frames de um vídeo usando MediaPipe Pose.
+    Retorna um array numpy de shape (frames, 33, 3) ou None em caso de erro.
+    """
+    mp_pose = mp.solutions.pose
+    pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return None
+    keypoints = []
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = pose.process(frame_rgb)
+        if results.pose_landmarks:
+            frame_keypoints = []
+            for landmark in results.pose_landmarks.landmark:
+                frame_keypoints.append([landmark.x, landmark.y, landmark.z])
+            keypoints.append(frame_keypoints)
+        else:
+            keypoints.append([[0.0, 0.0, 0.0] for _ in range(33)])
+    cap.release()
+    pose.close()
+    if len(keypoints) == 0:
+        return None
+    return np.array(keypoints)
+
+def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
+    # Verificar se os arquivos existem
+    if not os.path.exists(user_path) or not os.path.exists(ref_path):
+        st.error("❌ Arquivos de vídeo não encontrados!")
+        return None
+    
+    # Extrair keypoints dos vídeos
+    user_keypoints = extract_keypoints(user_path)
+    ref_keypoints = extract_keypoints(ref_path)
+    
+    if user_keypoints is None or ref_keypoints is None:
+        st.error("❌ Erro ao extrair keypoints dos vídeos!")
+        return None
     
     # Calcular score de similaridade
     score = calculate_similarity(user_keypoints, ref_keypoints)
@@ -451,45 +379,54 @@ def analyze_and_visualize(user_path, ref_path):
         return
     
     # Exibir score
-    st.subheader(f"Score de Semelhança: {score}/100")
+    st.subheader(f"🎯 Score de Semelhança: {score}/100")
     
     # Analisar partes do corpo
     part_errors = analyze_body_parts(user_keypoints, ref_keypoints)
+    # Converter erros em score por parte (quanto menor o erro, maior o score)
+    scores_por_parte = {parte: int(max(0, 100 - erro*100)) for parte, erro in part_errors.items()}
     
     # Gerar insights
     insights = generate_insights(part_errors)
     
-    # Exibir insights (alertas de correção)
+    # Exibir insights (alertas de correção) em um quadro único
     if insights:
-        st.subheader("📝 Dicas para Melhorar")
-        for tip_message in insights:
-            st.info(tip_message)
+        st.subheader("📝 Feedback do Movimento")
+        feedback_text = "### 🎯 Pontos de Atenção\n\n"
+        for i, tip_message in enumerate(insights, 1):
+            feedback_text += f"**{i}. {tip_message}**\n\n"
+        if score >= 85:
+            feedback_text += "\n### 🌟 Excelente!\nSeu movimento está muito próximo do ideal! Continue praticando para manter a consistência."
+        elif score >= 60:
+            feedback_text += "\n### 💪 Bom trabalho!\nVocê está no caminho certo! Foque nos ajustes sugeridos para melhorar ainda mais."
+        else:
+            feedback_text += "\n### 🔄 Continue praticando!\nNão desanime! Cada tentativa é uma oportunidade de aprendizado. Foque nos ajustes sugeridos."
+        st.markdown(feedback_text)
     
     # Criar timestamp para nomear a pasta
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Criar pasta para os resultados
+    # Copiar vídeos para a pasta de resultados
     results_dir = os.path.join("app", "results", timestamp)
     os.makedirs(results_dir, exist_ok=True)
-    
-    # Copiar vídeos para a pasta de resultados
     shutil.copy2(user_path, os.path.join(results_dir, "user.mp4"))
     shutil.copy2(ref_path, os.path.join(results_dir, "ref.mp4"))
     
-    # Criar dicionário de resultados
-    resultados = {
-        "score": score,
+    # Salvar análise em JSON
+    data = {
+        "nome_usuario": nome_usuario,
+        "movimento": tipo_movimento,
+        "score_geral": score,
+        "score_por_parte": scores_por_parte,
+        "data": str(datetime.now()),
         "timestamp": timestamp,
         "video_path": results_dir,
         "feedback": "Análise concluída com sucesso",
         "insights": insights
     }
+    save_analysis(data)
     
-    # Salvar resultados em JSON
-    with open(os.path.join(results_dir, "analysis.json"), "w") as f:
-        json.dump(resultados, f)
-    
-    return resultados
+    return data
 
 def display_analysis_history():
     st.title("📊 Histórico de Análises")
@@ -540,112 +477,6 @@ def display_analysis_history():
                         st.video(ref_hist_video_path)
                         st.caption("Vídeo de Referência")
                         
-def visualizar_esqueleto_referencia(video_path):
-    """
-    Visualiza o vídeo de referência com o esqueleto sobreposto.
-    
-    Args:
-        video_path (str): Caminho para o vídeo de referência
-    """
-    # Inicializar MediaPipe Pose
-    mp_pose = mp.solutions.pose
-    mp_drawing = mp.solutions.drawing_utils
-    pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
-    
-    # Abrir o vídeo
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        st.error("❌ Erro ao abrir o vídeo de referência")
-        return
-    
-    # Obter informações do vídeo
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_delay = 1/fps if fps > 0 else 0.03  # Delay entre frames
-    
-    # Container para o vídeo
-    video_container = st.empty()
-    
-    # Barra de progresso
-    progress_bar = st.progress(0)
-    frame_count = 0
-    
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-            
-        # Converter frame para RGB
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        # Processar pose
-        results = pose.process(frame_rgb)
-        
-        if results.pose_landmarks:
-            # Desenhar o esqueleto
-            mp_drawing.draw_landmarks(
-                frame_rgb,
-                results.pose_landmarks,
-                mp_pose.POSE_CONNECTIONS,
-                mp_drawing.DrawingSpec(color=(245,117,66), thickness=4, circle_radius=4),
-                mp_drawing.DrawingSpec(color=(245,66,230), thickness=4, circle_radius=4)
-            )
-        
-        # Atualizar o container com o frame atual
-        video_container.image(frame_rgb, channels="RGB", use_container_width=True)
-        
-        # Atualizar barra de progresso
-        frame_count += 1
-        progress = frame_count / total_frames
-        progress_bar.progress(progress)
-        
-        # Pequeno delay para simular tempo real
-        time.sleep(frame_delay)
-    
-    # Liberar recursos
-    cap.release()
-    pose.close()
-
-def test_analysis():
-    """
-    Função para testar o sistema de análise com vídeos de teste.
-    """
-    st.subheader("🧪 Teste do Sistema")
-    
-    # Caminhos dos vídeos de teste
-    test_user_path = os.path.join("app", "videos", "user.mp4")
-    test_ref_path = os.path.join("app", "videos", "ref.mp4")
-    
-    if not os.path.exists(test_user_path) or not os.path.exists(test_ref_path):
-        st.error("❌ Vídeos de teste não encontrados! Por favor, certifique-se de que os arquivos existem em app/videos/")
-        return
-    
-    # Criar duas colunas para o vídeo e os dados
-    col_video, col_dados = st.columns([2, 1])
-    
-    with col_video:
-        st.subheader("🎯 Movimento de Referência")
-        # Visualizar esqueleto de referência
-        visualizar_esqueleto_referencia(test_ref_path)
-    
-    with col_dados:
-        st.subheader("📊 Padrões de Movimento")
-        # Calcular e mostrar padrões de referência
-        padroes = calcular_padroes_referencia(test_ref_path)
-        if padroes:
-            st.json(padroes)
-    
-    # Realizar análise completa
-    st.subheader("📈 Análise do Movimento de Teste")
-    resultados = analyze_and_visualize(test_user_path, test_ref_path)
-    
-    if resultados:
-        st.success("✅ Teste concluído com sucesso!")
-        
-        # Mostrar resultados da análise
-        st.subheader("📊 Resultados do Teste")
-        st.json(resultados)
-
 def main():
     st.title("🏀 Análise de Movimento de Basquete")
     
@@ -660,6 +491,10 @@ def main():
             test_analysis()
         
         st.divider()
+        
+        # Inputs do usuário
+        nome_usuario = st.text_input("Nome do usuário")
+        tipo_movimento = st.text_input("Tipo do movimento (ex: arremesso, bandeja, etc.)")
         
         # Upload dos vídeos em colunas separadas
         col1, col2 = st.columns(2)
@@ -684,7 +519,7 @@ def main():
             if ref_video:
                 st.success("✅ Vídeo de referência carregado com sucesso!")
         
-        if user_video and ref_video:
+        if user_video and ref_video and nome_usuario and tipo_movimento:
             # Salvar os vídeos temporariamente
             user_path = os.path.join("app", "temp", "user.mp4")
             ref_path = os.path.join("app", "temp", "ref.mp4")
@@ -697,24 +532,15 @@ def main():
             
             # Botão para iniciar análise
             if st.button("Iniciar Análise"):
-                # Criar duas colunas para o vídeo e os dados
-                col_video, col_dados = st.columns([2, 1])
-                
-                with col_video:
-                    st.subheader("🎯 Movimento de Referência")
-                    # Visualizar esqueleto de referência
-                    visualizar_esqueleto_referencia(ref_path)
-                
-                with col_dados:
-                    st.subheader("📊 Padrões de Movimento")
-                    # Calcular e mostrar padrões de referência
-                    padroes = calcular_padroes_referencia(ref_path)
-                    if padroes:
-                        st.json(padroes)
+                # Calcular e mostrar padrões de referência
+                st.subheader("📊 Padrões de Movimento")
+                padroes = calcular_padroes_referencia(ref_path)
+                if padroes:
+                    st.json(padroes)
                 
                 # Realizar análise completa
                 st.subheader("📈 Análise do Seu Movimento")
-                resultados = analyze_and_visualize(user_path, ref_path)
+                resultados = analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento)
                 
                 if resultados:
                     st.success("✅ Análise concluída com sucesso!")
@@ -723,7 +549,9 @@ def main():
                     st.subheader("📊 Resultados da Análise")
                     st.json(resultados)
         else:
-            if not user_video and not ref_video:
+            if not nome_usuario or not tipo_movimento:
+                st.info("📝 Por favor, preencha seu nome e o tipo do movimento para iniciar a análise")
+            elif not user_video and not ref_video:
                 st.info("📝 Por favor, faça upload dos dois vídeos para iniciar a análise")
             elif not user_video:
                 st.info("📝 Por favor, faça upload do seu vídeo")
@@ -732,6 +560,37 @@ def main():
     
     with tab2:
         display_analysis_history()
+
+def test_analysis():
+    """
+    Função para testar o sistema de análise com vídeos de teste.
+    """
+    st.subheader("🧪 Teste do Sistema")
+    
+    # Caminhos dos vídeos de teste
+    test_user_path = os.path.join("app", "videos", "user.mp4")
+    test_ref_path = os.path.join("app", "videos", "ref.mp4")
+    
+    if not os.path.exists(test_user_path) or not os.path.exists(test_ref_path):
+        st.error("❌ Vídeos de teste não encontrados! Por favor, certifique-se de que os arquivos existem em app/videos/")
+        return
+    
+    # Calcular e mostrar padrões de referência
+    st.subheader("📊 Padrões de Movimento")
+    padroes = calcular_padroes_referencia(test_ref_path)
+    if padroes:
+        st.json(padroes)
+    
+    # Realizar análise completa
+    st.subheader("📈 Análise do Movimento de Teste")
+    resultados = analyze_and_visualize(test_user_path, test_ref_path, "Teste", "Teste")
+    
+    if resultados:
+        st.success("✅ Teste concluído com sucesso!")
+        
+        # Mostrar resultados da análise
+        st.subheader("📊 Resultados do Teste")
+        st.json(resultados)
 
 if __name__ == "__main__":
     main()
