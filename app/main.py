@@ -315,13 +315,13 @@ def calculate_similarity(user_keypoints, ref_keypoints):
     
     return score_percentual
 
-def save_analysis(data):
+def save_analysis(data, usuario_nome):
     """
-    Salva os dados da análise em um arquivo JSON na pasta de resultados.
+    Salva os dados da análise em um arquivo JSON na pasta de resultados do usuário.
     """
-    results_dir = os.path.join("app", "results")
+    results_dir = os.path.join("app", "results", usuario_nome)
     os.makedirs(results_dir, exist_ok=True)
-    filename = f"analysis_{data['nome_usuario']}_{data['data'].replace(':', '-').replace(' ', '_')}.json"
+    filename = f"{usuario_nome}_analise_{data['data'].replace(':', '-').replace(' ', '_')}.json"
     filepath = os.path.join(results_dir, filename)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -466,7 +466,7 @@ def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # Copiar vídeos para a pasta de resultados
-    results_dir = os.path.join("app", "results", timestamp)
+    results_dir = os.path.join("app", "results", nome_usuario)
     os.makedirs(results_dir, exist_ok=True)
     shutil.copy2(user_path, os.path.join(results_dir, "user.mp4"))
     shutil.copy2(ref_path, os.path.join(results_dir, "ref.mp4"))
@@ -483,31 +483,33 @@ def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
         "feedback": "Análise concluída com sucesso",
         "insights": insights
     }
-    save_analysis(data)
+    save_analysis(data, nome_usuario)
     
     return data
 
 def display_analysis_history():
     st.header("4️⃣ Histórico de Análises")
     st.markdown("Consulte análises anteriores realizadas neste sistema.")
-    results_dir = os.path.join("app", "results")
+    usuario_nome = st.session_state.get("usuario", "")
+    if not usuario_nome:
+        st.info("Digite seu nome para visualizar seu histórico.")
+        return
+    results_dir = os.path.join("app", "results", usuario_nome)
     if not os.path.exists(results_dir):
-        st.info("Nenhuma análise encontrada.")
+        st.info("Nenhuma análise encontrada para este usuário.")
         return
     json_files = [f for f in os.listdir(results_dir) if f.endswith('.json')]
     if not json_files:
-        st.info("Nenhuma análise encontrada.")
+        st.info("Nenhuma análise encontrada para este usuário.")
         return
     json_files = sorted(json_files, reverse=True)
     for json_file in json_files:
         json_path = os.path.join(results_dir, json_file)
         with open(json_path, "r", encoding="utf-8") as f:
             analysis = json.load(f)
-        # Fallback para score antigo
         score = analysis.get('score_geral')
         if score is None:
             score = analysis.get('score')
-        # Corrigir score para percentual inteiro
         if score is not None:
             try:
                 score_float = float(score)
@@ -523,9 +525,34 @@ def display_analysis_history():
         with st.expander(f"Ver Histórico: {resumo}"):
             st.json(analysis)
 
+def verificar_movimento_correspondente(user_keypoints, tipo_movimento, threshold_bandeja=0.08, threshold_parado=0.03):
+    """
+    Verifica se o movimento do vídeo do usuário condiz com o tipo selecionado.
+    - Para 'bandeja': espera deslocamento significativo do quadril (eixo X)
+    - Para 'arremesso parado': espera deslocamento mínimo
+    Retorna True se condizente, False se incoerente.
+    """
+    if user_keypoints is None or len(user_keypoints.shape) < 2:
+        return False
+    quadril_index = 23  # Quadril esquerdo (pode usar 24 para direito ou média dos dois)
+    deslocamento = user_keypoints[:, quadril_index, 0].max() - user_keypoints[:, quadril_index, 0].min()
+    if tipo_movimento == "bandeja":
+        return deslocamento >= threshold_bandeja
+    elif tipo_movimento == "arremesso parado":
+        return deslocamento <= threshold_parado
+    # Para outros tipos, considerar sempre True (ou expandir lógica)
+    return True
+
 def main():
     st.set_page_config(page_title="Análise de Movimento de Basquete", layout="wide")
     st.title("🏀 Análise de Movimento de Basquete")
+    
+    # Campo para nome do usuário (antes de tudo)
+    usuario_nome = st.text_input("Digite seu nome ou apelido para salvar seu histórico:")
+    if not usuario_nome:
+        st.warning("Por favor, digite seu nome para continuar.")
+        st.stop()
+    st.session_state["usuario"] = usuario_nome
     
     # Seções principais
     tab1, tab2 = st.tabs(["Análise do Movimento", "Histórico de Análises"])
@@ -535,7 +562,7 @@ def main():
         st.markdown("Faça upload do seu vídeo e do vídeo de referência para iniciar a análise.")
         
         # Inputs do usuário
-        nome_usuario = st.text_input("Nome do usuário")
+        nome_usuario = usuario_nome
         tipo_movimento = st.selectbox(
             "Qual movimento está sendo analisado?",
             ["arremesso parado", "drible", "bandeja"]
@@ -561,8 +588,10 @@ def main():
             if ref_video:
                 st.success("✅ Vídeo de referência carregado com sucesso!")
         
+        # Validação automática do tipo de movimento
+        validado = True
+        user_keypoints = None
         if user_video and ref_video and nome_usuario and tipo_movimento:
-            # Salvar os vídeos temporariamente
             user_path = os.path.join("app", "temp", "user.mp4")
             ref_path = os.path.join("app", "temp", "ref.mp4")
             os.makedirs(os.path.dirname(user_path), exist_ok=True)
@@ -570,7 +599,21 @@ def main():
                 f.write(user_video.getbuffer())
             with open(ref_path, "wb") as f:
                 f.write(ref_video.getbuffer())
-            
+            user_keypoints = extract_keypoints(user_path)
+            if not verificar_movimento_correspondente(user_keypoints, tipo_movimento):
+                st.warning(f"O vídeo enviado parece não corresponder ao tipo de movimento selecionado ({tipo_movimento}). Deseja continuar mesmo assim?")
+                col_c, col_r = st.columns([1,1])
+                with col_c:
+                    continuar = st.button("Continuar mesmo assim")
+                with col_r:
+                    reenviar = st.button("Reenviar vídeos")
+                if not continuar:
+                    validado = False
+                if reenviar:
+                    st.experimental_rerun()
+        
+        if user_video and ref_video and nome_usuario and tipo_movimento and validado:
+            # Visualização e análise só se validado
             st.header("2️⃣ Visualização dos Movimentos com Esqueleto")
             st.markdown("Veja lado a lado o seu movimento e o de referência, ambos com o esqueleto desenhado.")
             col_vid1, col_vid2 = st.columns(2)
@@ -583,17 +626,42 @@ def main():
             st.header("3️⃣ Score e Feedback do Movimento")
             st.markdown("Clique para analisar e receber feedback personalizado.")
             if st.button("Iniciar Análise"):
-                st.subheader("📊 Padrões de Movimento")
-                padroes = calcular_padroes_referencia(ref_path)
-                if padroes:
-                    st.json(padroes)
                 st.subheader("📈 Análise do Seu Movimento")
                 resultados = analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento)
                 if resultados:
                     st.success("✅ Análise concluída com sucesso!")
                     st.subheader("📊 Resultados da Análise")
                     st.json(resultados)
-        else:
+
+                    # Seção de download
+                    st.markdown("## 📥 Download do Resultado")
+                    usuario_nome = nome_usuario
+                    data_str = resultados.get('data', '').replace(':', '-').replace(' ', '_')
+                    results_dir = os.path.join("app", "results", usuario_nome)
+                    json_path = os.path.join(results_dir, f"{usuario_nome}_analise_{data_str}.json")
+                    png_path = os.path.join(results_dir, f"{usuario_nome}_analise_{data_str}.png")
+                    video_path = os.path.join(results_dir, "user.mp4")  # ou outro nome se gerar vídeo com overlay
+
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        if os.path.exists(json_path):
+                            with open(json_path, "r", encoding="utf-8") as f:
+                                st.download_button("📄 Baixar dados (.json)", f, file_name=os.path.basename(json_path), mime="application/json")
+                        else:
+                            st.info("Arquivo JSON não encontrado.")
+                    with col2:
+                        if os.path.exists(png_path):
+                            with open(png_path, "rb") as f:
+                                st.download_button("🖼️ Baixar imagem (.png)", f, file_name=os.path.basename(png_path), mime="image/png")
+                        else:
+                            st.info("Imagem PNG não disponível.")
+                    with col3:
+                        if os.path.exists(video_path):
+                            with open(video_path, "rb") as f:
+                                st.download_button("🎥 Baixar vídeo com esqueleto", f, file_name=os.path.basename(video_path), mime="video/mp4")
+                        else:
+                            st.info("Vídeo não disponível.")
+        elif not (user_video and ref_video and nome_usuario and tipo_movimento):
             st.info("📝 Preencha todos os campos e faça upload dos dois vídeos para liberar a visualização e análise.")
     
     with tab2:
