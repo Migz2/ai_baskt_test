@@ -446,33 +446,33 @@ def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
         return None
     
     # Extrair keypoints dos vídeos
-    user_keypoints = extract_keypoints(user_path)
-    ref_keypoints = extract_keypoints(ref_path)
+    user_kp = extract_keypoints(user_path)
+    ref_kp = extract_keypoints(ref_path)
     
-    if user_keypoints is None or ref_keypoints is None:
+    if user_kp is None or ref_kp is None:
         st.error("❌ Erro ao extrair keypoints dos vídeos!")
         return None
     
     # Detectar frame de saída da bola em ambos os vídeos
     user_cap = cv2.VideoCapture(user_path)
     fps_user = user_cap.get(cv2.CAP_PROP_FPS)
-    frame_saida_bola_user = detectar_frame_saida_bola(user_keypoints, fps=fps_user)
+    frame_saida_bola_user = detectar_frame_saida_bola(user_kp, fps=fps_user)
     user_cap.release()
     ref_cap = cv2.VideoCapture(ref_path)
     fps_ref = ref_cap.get(cv2.CAP_PROP_FPS)
-    frame_saida_bola_ref = detectar_frame_saida_bola(ref_keypoints, fps=fps_ref)
+    frame_saida_bola_ref = detectar_frame_saida_bola(ref_kp, fps=fps_ref)
     ref_cap.release()
     # Cortar ambos até o menor frame de saída
     frame_limite = min(frame_saida_bola_user, frame_saida_bola_ref)
-    user_keypoints = user_keypoints[:frame_limite]
-    ref_keypoints = ref_keypoints[:frame_limite]
+    user_kp = user_kp[:frame_limite]
+    ref_kp = ref_kp[:frame_limite]
     
     # Calcular erro por frame
-    erros_por_frame = [np.mean(np.abs(user_keypoints[i] - ref_keypoints[i])) for i in range(len(user_keypoints))]
+    erros_por_frame = [np.mean(np.abs(user_kp[i] - ref_kp[i])) for i in range(min(len(user_kp), len(ref_kp)))]
     frames_criticos = identificar_frames_criticos(np.array(erros_por_frame), top_n=3)
     
     # Calcular score de similaridade
-    score = calculate_similarity(user_keypoints, ref_keypoints)
+    score = calculate_similarity(user_kp, ref_kp)
     
     if score is None:
         st.warning("⚠️ Não foi possível calcular o score: dados inválidos.")
@@ -482,7 +482,7 @@ def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
     st.subheader(f"🎯 Score de Semelhança: {score}/100")
     
     # Analisar partes do corpo
-    part_errors = analyze_body_parts(user_keypoints, ref_keypoints)
+    part_errors = analyze_body_parts(user_kp, ref_kp)
     # Converter erros em score por parte (quanto menor o erro, maior o score)
     scores_por_parte = {parte: int(max(0, 100 - erro*100)) for parte, erro in part_errors.items()}
     
@@ -661,7 +661,7 @@ def main():
         
         # Validação automática do tipo de movimento
         validado = True
-        user_keypoints = None
+        user_kp = None
         if user_video and ref_video and nome_usuario and tipo_movimento:
             user_path = os.path.join("app", "temp", "user.mp4")
             ref_path = os.path.join("app", "temp", "ref.mp4")
@@ -670,8 +670,8 @@ def main():
                 f.write(user_video.getbuffer())
             with open(ref_path, "wb") as f:
                 f.write(ref_video.getbuffer())
-            user_keypoints = extract_keypoints(user_path)
-            if not verificar_movimento_correspondente(user_keypoints, tipo_movimento):
+            user_kp = extract_keypoints(user_path)
+            if not verificar_movimento_correspondente(user_kp, tipo_movimento):
                 st.warning(f"O vídeo enviado parece não corresponder ao tipo de movimento selecionado ({tipo_movimento}). Deseja continuar mesmo assim?")
                 col_c, col_r = st.columns([1,1])
                 with col_c:
@@ -689,10 +689,10 @@ def main():
                 st.header("2️⃣ Visualização dos Movimentos com Esqueleto")
                 st.markdown("Veja lado a lado o seu movimento e o de referência, ambos com o esqueleto desenhado.")
                 # Detectar frame de saída da bola para limitar visualização
-                user_keypoints_temp = extract_keypoints(user_path)
+                user_kp_temp = extract_keypoints(user_path)
                 user_cap_temp = cv2.VideoCapture(user_path)
                 fps_temp = user_cap_temp.get(cv2.CAP_PROP_FPS)
-                frame_saida_bola_temp = detectar_frame_saida_bola(user_keypoints_temp, fps_temp)
+                frame_saida_bola_temp = detectar_frame_saida_bola(user_kp_temp, fps_temp)
                 user_cap_temp.release()
                 # Se já houver análise, tente recuperar frames críticos
                 frames_criticos = None
@@ -706,6 +706,8 @@ def main():
             st.header("3️⃣ Score e Feedback do Movimento")
             st.markdown("Clique para analisar e receber feedback personalizado.")
             if st.button("Iniciar Análise"):
+                user_kp = extract_keypoints(user_path)
+                ref_kp = extract_keypoints(ref_path)
                 st.subheader("📈 Análise do Seu Movimento")
                 resultados = analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento)
                 if resultados:
@@ -714,41 +716,60 @@ def main():
                     st.subheader("📊 Resultados da Análise")
                     st.json(resultados)
 
-                    # Exibir partes do corpo com maior erro de forma visual
-                    def calcular_erro_por_parte_corpo(user_kp, ref_kp):
-                        partes_corpo = {
-                            "Braço Direito": [12, 14, 16],
-                            "Braço Esquerdo": [11, 13, 15],
-                            "Perna Direita": [24, 26, 28],
-                            "Perna Esquerda": [23, 25, 27],
-                            "Tronco": [11, 12, 23, 24],
-                            "Cabeça": [0],
-                        }
-                        erros_por_parte = {}
-                        n_frames = min(len(user_kp), len(ref_kp))
-                        for parte, indices in partes_corpo.items():
-                            soma = 0
-                            count = 0
-                            for i in range(n_frames):
+                    # --- NOVA LÓGICA DE ANÁLISE RELEVANTE E PONDERADA ---
+                    # 1. Definir pesos e partes relevantes
+                    pesos_partes = {
+                        "Braço Direito": 1.0,
+                        "Mão Direita": 1.2,
+                        "Braço Esquerdo": 0.8,
+                        "Mão Esquerda": 1.0,
+                        "Tronco": 1.1,
+                        "Perna Direita": 0.6,
+                        "Perna Esquerda": 0.6,
+                        "Quadril": 1.0
+                    }
+                    indices_partes = {
+                        "Braço Direito": [12, 14],
+                        "Mão Direita": [16],
+                        "Braço Esquerdo": [11, 13],
+                        "Mão Esquerda": [15],
+                        "Tronco": [11, 12, 23, 24],
+                        "Perna Direita": [24, 26, 28],
+                        "Perna Esquerda": [23, 25, 27],
+                        "Quadril": [23, 24]
+                    }
+                    # 2. Função para detectar movimento relevante
+                    def parte_tem_movimento(user_kp, parte_indices, limiar=0.01):
+                        # Considera movimento relevante se o desvio padrão dos keypoints for maior que o limiar
+                        parte_kps = user_kp[parte_indices, :2]  # só x, y
+                        return np.std(parte_kps) > limiar
+                    # 3. Calcular erro médio ponderado por parte
+                    n_frames = min(len(user_kp), len(ref_kp))
+                    erro_medio_por_parte = {}
+                    for parte, peso in pesos_partes.items():
+                        indices = indices_partes[parte]
+                        erros = []
+                        for i in range(n_frames):
+                            if parte_tem_movimento(user_kp[i], indices):
+                                soma = 0
+                                count = 0
                                 for idx in indices:
                                     if idx < user_kp.shape[1] and idx < ref_kp.shape[1]:
                                         dist = np.linalg.norm(user_kp[i, idx] - ref_kp[i, idx])
                                         if not np.isnan(dist):
                                             soma += dist
                                             count += 1
-                            erros_por_parte[parte] = soma / count if count else 0
-                        return erros_por_parte
-
-                    # Calcular e exibir partes críticas
-                    user_kp = extract_keypoints(user_path)
-                    ref_kp = extract_keypoints(ref_path)
-                    erros = calcular_erro_por_parte_corpo(user_kp, ref_kp)
-                    partes_criticas = sorted(erros.items(), key=lambda x: x[1], reverse=True)[:3]
+                                if count:
+                                    erros.append((soma / count) * peso)
+                        if erros:
+                            erro_medio_por_parte[parte] = sum(erros) / len(erros)
+                    # 4. Ranking das 3 partes com maior erro
+                    partes_criticas = sorted(erro_medio_por_parte.items(), key=lambda x: x[1], reverse=True)[:3]
+                    # 5. Exibir ranking visual
                     with st.container():
                         st.markdown("""
                         <h3 style='color:#ff4d4d; font-weight:700;'>❗ Partes com Maior Erro no Movimento</h3>
                         """, unsafe_allow_html=True)
-
                         for parte, valor in partes_criticas:
                             st.markdown(f"""
                             <div style='
@@ -762,40 +783,34 @@ def main():
                             '>
                                 <h4 style='margin-bottom: 8px;'>{parte}</h4>
                                 <p style='margin: 0; font-size: 15px;'>
-                                    <strong>Erro médio:</strong> <span style='background-color: rgba(255,255,255,0.15); padding: 4px 8px; border-radius: 8px;'>{valor:.2f}</span><br><br>
+                                    <strong>Erro médio ponderado:</strong> <span style='background-color: rgba(255,255,255,0.15); padding: 4px 8px; border-radius: 8px;'>{valor:.2f}</span><br><br>
                                     <span style='font-style: italic;'> Reforce o controle e a precisão nesta área.</span>
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
-
-                    # NOVO: Exibir Momentos Críticos do Movimento
+                    # --- Momentos Críticos do Movimento ---
                     st.markdown("### 📸 Momentos Críticos do Movimento")
                     frames_criticos = resultados.get('frames_criticos', [])
-                    erros_por_frame = [np.mean(np.abs(user_kp[i] - ref_kp[i])) for i in range(len(user_kp))]
+                    erros_por_frame = [np.mean(np.abs(user_kp[i] - ref_kp[i])) for i in range(n_frames)]
                     results_dir = os.path.join("app", "results", nome_usuario)
                     col1, col2, col3 = st.columns(3)
                     for i, idx in enumerate(frames_criticos[:3]):
                         erro_total = erros_por_frame[idx] if idx < len(erros_por_frame) else None
-                        # Calcular partes com maior erro naquele frame
+                        # Calcular partes com maior erro naquele frame (usando mesma lógica e pesos)
                         partes_frame = {}
-                        partes_corpo = {
-                            "Braço Direito": [12, 14, 16],
-                            "Braço Esquerdo": [11, 13, 15],
-                            "Perna Direita": [24, 26, 28],
-                            "Perna Esquerda": [23, 25, 27],
-                            "Tronco": [11, 12, 23, 24],
-                            "Cabeça": [0],
-                        }
-                        for parte, indices in partes_corpo.items():
-                            soma = 0
-                            count = 0
-                            for idx_kp in indices:
-                                if idx_kp < user_kp.shape[1] and idx_kp < ref_kp.shape[1]:
-                                    dist = np.linalg.norm(user_kp[idx, idx_kp] - ref_kp[idx, idx_kp])
-                                    if not np.isnan(dist):
-                                        soma += dist
-                                        count += 1
-                            partes_frame[parte] = soma / count if count else 0
+                        for parte, peso in pesos_partes.items():
+                            indices = indices_partes[parte]
+                            if parte_tem_movimento(user_kp[idx], indices):
+                                soma = 0
+                                count = 0
+                                for idx_kp in indices:
+                                    if idx_kp < user_kp.shape[1] and idx_kp < ref_kp.shape[1]:
+                                        dist = np.linalg.norm(user_kp[idx, idx_kp] - ref_kp[idx, idx_kp])
+                                        if not np.isnan(dist):
+                                            soma += dist
+                                            count += 1
+                                if count:
+                                    partes_frame[parte] = (soma / count) * peso
                         top_partes = sorted(partes_frame.items(), key=lambda x: x[1], reverse=True)[:2]
                         top_partes_str = ', '.join([p[0] for p in top_partes])
                         # Salvar imagem do frame crítico com esqueleto
