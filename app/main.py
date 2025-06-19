@@ -731,36 +731,45 @@ def main():
                         # Considera movimento relevante se o desvio padrão dos keypoints for maior que o limiar
                         parte_kps = user_kp[parte_indices, :2]  # só x, y
                         return np.std(parte_kps) > limiar
-                    # 3. Calcular erro médio ponderado por parte
+                    # 3. Modularização: Função para cálculo de erro médio ponderado por parte com filtro de movimento real
+                    def calcular_partes_criticas(user_kp, ref_kp, pesos_partes, indices_partes, parte_tem_movimento):
+                        n_frames = min(len(user_kp), len(ref_kp))
+                        erro_medio_por_parte = {}
+                        partes_com_movimento = set()
+                        for parte, peso in pesos_partes.items():
+                            indices = indices_partes[parte]
+                            erros = []
+                            for i in range(n_frames):
+                                if parte_tem_movimento(user_kp[i], indices):
+                                    partes_com_movimento.add(parte)
+                                    soma = 0
+                                    count = 0
+                                    for idx in indices:
+                                        if idx < user_kp.shape[1] and idx < ref_kp.shape[1]:
+                                            dist = np.linalg.norm(user_kp[i, idx] - ref_kp[i, idx])
+                                            if not np.isnan(dist):
+                                                soma += dist
+                                                count += 1
+                                    if count:
+                                        erros.append((soma / count) * peso)
+                            if erros:
+                                erro_medio_por_parte[parte] = sum(erros) / len(erros)
+                        # Filtrar apenas partes que realmente se moveram
+                        erro_medio_por_parte = {parte: erro for parte, erro in erro_medio_por_parte.items() if parte in partes_com_movimento}
+                        partes_criticas = sorted(erro_medio_por_parte.items(), key=lambda x: x[1], reverse=True)[:3]
+                        partes_criticas_nomes = [p[0] for p in partes_criticas]
+                        return partes_criticas, partes_criticas_nomes
+
+                    # Usar a função modularizada
+                    partes_criticas, partes_criticas_nomes = calcular_partes_criticas(user_kp, ref_kp, pesos_partes, indices_partes, parte_tem_movimento)
                     n_frames = min(len(user_kp), len(ref_kp))
-                    erro_medio_por_parte = {}
-                    for parte, peso in pesos_partes.items():
-                        indices = indices_partes[parte]
-                        erros = []
-                        for i in range(n_frames):
-                            if parte_tem_movimento(user_kp[i], indices):
-                                soma = 0
-                                count = 0
-                                for idx in indices:
-                                    if idx < user_kp.shape[1] and idx < ref_kp.shape[1]:
-                                        dist = np.linalg.norm(user_kp[i, idx] - ref_kp[i, idx])
-                                        if not np.isnan(dist):
-                                            soma += dist
-                                            count += 1
-                                if count:
-                                    erros.append((soma / count) * peso)
-                        if erros:
-                            erro_medio_por_parte[parte] = sum(erros) / len(erros)
-                    # 4. Ranking das 3 partes com maior erro
-                    partes_criticas = sorted(erro_medio_por_parte.items(), key=lambda x: x[1], reverse=True)[:3]
-                    # 5. Exibir ranking visual
+
                     # --- Momentos Críticos do Movimento ---
                     st.markdown("### 📸 Momentos Críticos do Movimento")
                     frames_criticos = resultados.get('frames_criticos', [])
                     erros_por_frame = [np.mean(np.abs(user_kp[i] - ref_kp[i])) for i in range(n_frames)]
                     results_dir = os.path.join("app", "results", nome_usuario)
                     col1, col2, col3 = st.columns(3)
-                    partes_criticas_nomes = [p[0] for p in partes_criticas]
                     for i, idx in enumerate(frames_criticos[:3]):
                         erro_total = erros_por_frame[idx] if idx < len(erros_por_frame) else None
                         # Exibir erro das mesmas partes críticas do ranking global
