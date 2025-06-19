@@ -212,7 +212,7 @@ def calcular_padroes_referencia(video_path):
             punho_direito = [landmarks[16].x, landmarks[16].y, landmarks[16].z]
             angulo_cotovelo = calcular_angulo(ombro_direito, cotovelo_direito, punho_direito)
             angulos_cotovelo.append(angulo_cotovelo)
-            
+        
             # Calcular ângulo do joelho direito
             quadril_direito = [landmarks[24].x, landmarks[24].y, landmarks[24].z]
             joelho_direito = [landmarks[26].x, landmarks[26].y, landmarks[26].z]
@@ -223,7 +223,7 @@ def calcular_padroes_referencia(video_path):
             # Calcular amplitude do punho (distância relativa ao ombro)
             distancia_punho = np.linalg.norm(np.array(punho_direito) - np.array(ombro_direito))
             amplitudes_punho.append(distancia_punho)
-            
+        
             # Calcular inclinação do tronco
             quadril_esquerdo = [landmarks[23].x, landmarks[23].y, landmarks[23].z]
             ombro_esquerdo = [landmarks[11].x, landmarks[11].y, landmarks[11].z]
@@ -436,6 +436,10 @@ def generate_tiered_feedback(part_errors, limiar=0.1):
         feedback.append(f"🔹 [Tier B] {sorted_parts[2][0].capitalize()}: diferença menor, mas pode ser ajustada.")
     return feedback
 
+def identificar_frames_criticos(erros_por_frame, top_n=3):
+    indices = np.argsort(erros_por_frame)[-top_n:]
+    return sorted(indices)
+
 def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
     # Verificar se os arquivos existem
     if not os.path.exists(user_path) or not os.path.exists(ref_path):
@@ -458,6 +462,10 @@ def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
     # Cortar os keypoints até esse frame
     user_keypoints = user_keypoints[:frame_saida_bola]
     ref_keypoints = ref_keypoints[:frame_saida_bola]
+    
+    # Calcular erro por frame
+    erros_por_frame = [np.mean(np.abs(user_keypoints[i] - ref_keypoints[i])) for i in range(len(user_keypoints))]
+    frames_criticos = identificar_frames_criticos(np.array(erros_por_frame), top_n=3)
     
     # Calcular score de similaridade
     score = calculate_similarity(user_keypoints, ref_keypoints)
@@ -506,13 +514,26 @@ def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
         "movimento": tipo_movimento,
         "score_geral": score,
         "score_por_parte": scores_por_parte,
-        "data": str(datetime.now()),
-        "timestamp": timestamp,
+        "data": timestamp,
         "video_path": results_dir,
         "feedback": "Análise concluída com sucesso",
-        "insights": insights
+        "insights": insights,
+        "frames_criticos": [int(idx) for idx in frames_criticos],
+        "frames_dir": results_dir
     }
     save_analysis(data, nome_usuario)
+    
+    # Salvar frames críticos como imagem
+    frames_dir = os.path.join(results_dir, "frames")
+    os.makedirs(frames_dir, exist_ok=True)
+    cap = cv2.VideoCapture(user_path)
+    for idx in frames_criticos:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+        ret, frame = cap.read()
+        if ret:
+            frame_path = os.path.join(frames_dir, f"frame_{idx}.png")
+            cv2.imwrite(frame_path, frame)
+    cap.release()
     
     return data
 
@@ -574,7 +595,9 @@ def verificar_movimento_correspondente(user_keypoints, tipo_movimento, threshold
 
 def main():
     st.set_page_config(page_title="Análise de Movimento de Basquete", layout="wide")
-    st.title("🏀 Análise de Movimento de Basquete")
+    # Marca e subtítulo
+    st.markdown("<h1 style='text-align: center; font-size: 52px; font-weight: bold;'>Obsess.</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; font-weight: 400;'>🏀 Análise de Movimento de Basquete</h3>", unsafe_allow_html=True)
     
     # Campo para nome do usuário (antes de tudo)
     usuario_nome = st.text_input("Digite seu nome ou apelido para salvar seu histórico:")
@@ -585,7 +608,7 @@ def main():
     
     # Seções principais
     tab1, tab2 = st.tabs(["Análise do Movimento", "Histórico de Análises"])
-    
+
     with tab1:
         st.header("1️⃣ Upload dos Vídeos")
         st.markdown("Faça upload do seu vídeo e do vídeo de referência para iniciar a análise.")
@@ -643,20 +666,21 @@ def main():
         
         if user_video and ref_video and nome_usuario and tipo_movimento and validado:
             # Visualização e análise só se validado
-            st.header("2️⃣ Visualização dos Movimentos com Esqueleto")
-            st.markdown("Veja lado a lado o seu movimento e o de referência, ambos com o esqueleto desenhado.")
-            # Detectar frame de saída da bola para limitar visualização
-            user_keypoints_temp = extract_keypoints(user_path)
-            user_cap_temp = cv2.VideoCapture(user_path)
-            fps_temp = user_cap_temp.get(cv2.CAP_PROP_FPS)
-            frame_saida_bola_temp = detectar_frame_saida_bola(user_keypoints_temp, fps_temp)
-            user_cap_temp.release()
-            col_vid1, col_vid2 = st.columns(2)
-            with col_vid1:
-                draw_pose_on_video(user_path, st.container(), "Seu Movimento (com esqueleto)", frame_limit=frame_saida_bola_temp)
-            with col_vid2:
-                draw_pose_on_video(ref_path, st.container(), "Referência (com esqueleto)", frame_limit=frame_saida_bola_temp)
-            
+            if not st.session_state.videos_exibidos:
+                st.header("2️⃣ Visualização dos Movimentos com Esqueleto")
+                st.markdown("Veja lado a lado o seu movimento e o de referência, ambos com o esqueleto desenhado.")
+                # Detectar frame de saída da bola para limitar visualização
+                user_keypoints_temp = extract_keypoints(user_path)
+                user_cap_temp = cv2.VideoCapture(user_path)
+                fps_temp = user_cap_temp.get(cv2.CAP_PROP_FPS)
+                frame_saida_bola_temp = detectar_frame_saida_bola(user_keypoints_temp, fps_temp)
+                user_cap_temp.release()
+                col_vid1, col_vid2 = st.columns(2)
+                with col_vid1:
+                    draw_pose_on_video(user_path, st.container(), "Seu Movimento (com esqueleto)", frame_limit=frame_saida_bola_temp)
+                with col_vid2:
+                    draw_pose_on_video(ref_path, st.container(), "Referência (com esqueleto)", frame_limit=frame_saida_bola_temp)
+                st.session_state.videos_exibidos = True
             # Botão para iniciar análise
             st.header("3️⃣ Score e Feedback do Movimento")
             st.markdown("Clique para analisar e receber feedback personalizado.")
@@ -694,6 +718,18 @@ def main():
                         if os.path.exists(video_path):
                             with open(video_path, "rb") as f:
                                 st.download_button("🎥 Baixar vídeo com esqueleto", f, file_name=os.path.basename(video_path), mime="video/mp4")
+
+                    # Seção de picos de erro
+                    if "frames_criticos" in resultados and "frames_dir" in resultados:
+                        st.markdown("### ⛔ Picos de Erro")
+                        cols = st.columns(len(resultados["frames_criticos"]))
+                        for i, idx in enumerate(resultados["frames_criticos"]):
+                            frame_path = os.path.join(resultados["frames_dir"], f"frame_{idx}.png")
+                            with cols[i]:
+                                if os.path.exists(frame_path):
+                                    st.image(frame_path, caption=f"Frame {idx}")
+                                else:
+                                    st.warning(f"Frame {idx} não encontrado.")
             else:
                             st.info("Vídeo não disponível.")
         elif not (user_video and ref_video and nome_usuario and tipo_movimento):
@@ -702,7 +738,7 @@ def main():
     with tab2:
         st.header("4️⃣ Histórico de Análises")
         st.markdown("Consulte análises anteriores realizadas neste sistema.")
-    display_analysis_history()
+        display_analysis_history()
 
 def test_analysis():
     """
@@ -736,4 +772,6 @@ def test_analysis():
         st.json(resultados)
 
 if __name__ == "__main__":
+    if 'videos_exibidos' not in st.session_state:
+        st.session_state.videos_exibidos = False
     main()
