@@ -191,7 +191,7 @@ def calcular_padroes_referencia(video_path):
     progress_bar = st.progress(0)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     frame_count = 0
-    
+        
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -299,14 +299,14 @@ def calculate_similarity(user_keypoints, ref_keypoints):
     
     # Calcular score final usando a média do array de diferenças
     difference = np.mean(difference_array)
-    
+
     # Verificação de erro
     if np.isnan(difference) or difference is None:
         return None
     
     # Definir um fator de normalização para a diferença
     MAX_EXPECTED_DIFFERENCE = 1.0  # Ajuste este valor conforme a sensibilidade desejada
-    
+
     # Converter diferença em semelhança (quanto menor a diferença, maior a semelhança)
     similarity = max(0, 1.0 - (difference / MAX_EXPECTED_DIFFERENCE))
     
@@ -356,6 +356,46 @@ def extract_keypoints(video_path):
     if len(keypoints) == 0:
         return None
     return np.array(keypoints)
+
+def draw_pose_on_video(video_path, container, title):
+    """
+    Exibe o vídeo com esqueleto desenhado frame a frame em um container Streamlit.
+    """
+    mp_pose = mp.solutions.pose
+    mp_drawing = mp.solutions.drawing_utils
+    pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        container.error(f"❌ Erro ao abrir o vídeo: {title}")
+        return
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_delay = 1/fps if fps > 0 else 0.03
+    frame_count = 0
+    progress_bar = container.progress(0)
+    video_frame = container.empty()
+    container.caption(title)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = pose.process(frame_rgb)
+        if results.pose_landmarks:
+            mp_drawing.draw_landmarks(
+                frame_rgb,
+                results.pose_landmarks,
+                mp_pose.POSE_CONNECTIONS,
+                mp_drawing.DrawingSpec(color=(245,117,66), thickness=2, circle_radius=2),
+                mp_drawing.DrawingSpec(color=(245,66,230), thickness=2, circle_radius=2)
+            )
+        video_frame.image(frame_rgb, channels="RGB", use_container_width=True)
+        frame_count += 1
+        progress = frame_count / total_frames
+        progress_bar.progress(progress)
+        time.sleep(frame_delay)
+    cap.release()
+    pose.close()
 
 def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
     # Verificar se os arquivos existem
@@ -478,27 +518,21 @@ def display_analysis_history():
                         st.caption("Vídeo de Referência")
                         
 def main():
+    st.set_page_config(page_title="Análise de Movimento de Basquete", layout="wide")
     st.title("🏀 Análise de Movimento de Basquete")
     
-    # Criar abas
+    # Seções principais
     tab1, tab2 = st.tabs(["Análise do Movimento", "Histórico de Análises"])
     
     with tab1:
-        st.header("📹 Análise do Movimento")
-        
-        # Botão para executar teste
-        if st.button("🧪 Executar Teste do Sistema"):
-            test_analysis()
-        
-        st.divider()
+        st.header("1️⃣ Upload dos Vídeos")
+        st.markdown("Faça upload do seu vídeo e do vídeo de referência para iniciar a análise.")
         
         # Inputs do usuário
         nome_usuario = st.text_input("Nome do usuário")
         tipo_movimento = st.text_input("Tipo do movimento (ex: arremesso, bandeja, etc.)")
         
-        # Upload dos vídeos em colunas separadas
         col1, col2 = st.columns(2)
-        
         with col1:
             st.subheader("Seu Movimento")
             user_video = st.file_uploader(
@@ -508,7 +542,6 @@ def main():
             )
             if user_video:
                 st.success("✅ Vídeo do usuário carregado com sucesso!")
-        
         with col2:
             st.subheader("Movimento de Referência")
             ref_video = st.file_uploader(
@@ -524,41 +557,39 @@ def main():
             user_path = os.path.join("app", "temp", "user.mp4")
             ref_path = os.path.join("app", "temp", "ref.mp4")
             os.makedirs(os.path.dirname(user_path), exist_ok=True)
-            
             with open(user_path, "wb") as f:
                 f.write(user_video.getbuffer())
             with open(ref_path, "wb") as f:
                 f.write(ref_video.getbuffer())
             
+            st.header("2️⃣ Visualização dos Movimentos com Esqueleto")
+            st.markdown("Veja lado a lado o seu movimento e o de referência, ambos com o esqueleto desenhado.")
+            col_vid1, col_vid2 = st.columns(2)
+            with col_vid1:
+                draw_pose_on_video(user_path, st.container(), "Seu Movimento (com esqueleto)")
+            with col_vid2:
+                draw_pose_on_video(ref_path, st.container(), "Referência (com esqueleto)")
+            
             # Botão para iniciar análise
+            st.header("3️⃣ Score e Feedback do Movimento")
+            st.markdown("Clique para analisar e receber feedback personalizado.")
             if st.button("Iniciar Análise"):
-                # Calcular e mostrar padrões de referência
                 st.subheader("📊 Padrões de Movimento")
                 padroes = calcular_padroes_referencia(ref_path)
                 if padroes:
                     st.json(padroes)
-                
-                # Realizar análise completa
                 st.subheader("📈 Análise do Seu Movimento")
                 resultados = analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento)
-                
                 if resultados:
                     st.success("✅ Análise concluída com sucesso!")
-                    
-                    # Mostrar resultados da análise
                     st.subheader("📊 Resultados da Análise")
                     st.json(resultados)
         else:
-            if not nome_usuario or not tipo_movimento:
-                st.info("📝 Por favor, preencha seu nome e o tipo do movimento para iniciar a análise")
-            elif not user_video and not ref_video:
-                st.info("📝 Por favor, faça upload dos dois vídeos para iniciar a análise")
-            elif not user_video:
-                st.info("📝 Por favor, faça upload do seu vídeo")
-            elif not ref_video:
-                st.info("📝 Por favor, faça upload do vídeo de referência")
+            st.info("📝 Preencha todos os campos e faça upload dos dois vídeos para liberar a visualização e análise.")
     
     with tab2:
+        st.header("4️⃣ Histórico de Análises")
+        st.markdown("Consulte análises anteriores realizadas neste sistema.")
         display_analysis_history()
 
 def test_analysis():
