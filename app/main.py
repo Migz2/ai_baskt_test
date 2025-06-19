@@ -705,24 +705,26 @@ def main():
                     # --- NOVA LÓGICA DE ANÁLISE RELEVANTE E PONDERADA ---
                     # 1. Definir pesos e partes relevantes
                     pesos_partes = {
-                        "Braço Direito": 1.0,
-                        "Mão Direita": 1.2,
-                        "Braço Esquerdo": 0.8,
-                        "Mão Esquerda": 1.0,
-                        "Tronco": 1.1,
-                        "Perna Direita": 0.6,
-                        "Perna Esquerda": 0.6,
-                        "Quadril": 1.0
+                        "braco_direito": 1.0,
+                        "mao_direita": 1.2,
+                        "braco_esquerdo": 0.8,
+                        "mao_esquerda": 1.0,
+                        "tronco": 1.1,
+                        "perna_direita": 0.6,
+                        "perna_esquerda": 0.6,
+                        "cabeca": 0.2,
+                        "quadril": 1.0
                     }
                     indices_partes = {
-                        "Braço Direito": [12, 14],
-                        "Mão Direita": [16],
-                        "Braço Esquerdo": [11, 13],
-                        "Mão Esquerda": [15],
-                        "Tronco": [11, 12, 23, 24],
-                        "Perna Direita": [24, 26, 28],
-                        "Perna Esquerda": [23, 25, 27],
-                        "Quadril": [23, 24]
+                        "braco_direito": [12, 14],
+                        "mao_direita": [16],
+                        "braco_esquerdo": [11, 13],
+                        "mao_esquerda": [15],
+                        "tronco": [11, 12, 23, 24],
+                        "perna_direita": [24, 26, 28],
+                        "perna_esquerda": [23, 25, 27],
+                        "cabeca": [0],
+                        "quadril": [23, 24]
                     }
                     # 2. Função para detectar movimento relevante
                     def parte_tem_movimento(user_kp, parte_indices, limiar=0.01):
