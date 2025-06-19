@@ -829,15 +829,11 @@ def main():
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
-            else:
-                st.info("Vídeo não disponível.")
-        elif not (user_video and ref_video and nome_usuario and tipo_movimento):
-            st.info("📝 Preencha todos os campos, aceite os termos e faça upload dos dois vídeos para liberar a visualização e análise.")
 
     with tab2:
         st.header("4️⃣ Histórico de Análises")
         st.markdown("Consulte análises anteriores realizadas neste sistema.")
-    display_analysis_history()
+        display_analysis_history()
 
 def test_analysis():
     """
