@@ -469,54 +469,41 @@ def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
     return data
 
 def display_analysis_history():
-    st.title("📊 Histórico de Análises")
-    
-    # Listar todas as pastas de resultados
+    st.header("4️⃣ Histórico de Análises")
+    st.markdown("Consulte análises anteriores realizadas neste sistema.")
     results_dir = os.path.join("app", "results")
     if not os.path.exists(results_dir):
         st.info("Nenhuma análise encontrada.")
         return
-        
-    analysis_folders = sorted([f for f in os.listdir(results_dir) if os.path.isdir(os.path.join(results_dir, f))], reverse=True)
-    
-    if not analysis_folders:
+    json_files = [f for f in os.listdir(results_dir) if f.endswith('.json')]
+    if not json_files:
         st.info("Nenhuma análise encontrada.")
         return
-    
-    # Exibir cada análise
-    for folder in analysis_folders:
-        folder_path = os.path.join(results_dir, folder)
-        json_path = os.path.join(folder_path, "analysis.json")
-        
-        if os.path.exists(json_path):
-            with open(json_path, "r") as f:
-                analysis = json.load(f)
-            with st.expander(f"Análise de {folder}"):
-                # Exibir score
-                st.metric("Score de Semelhança", f"{analysis['score']}", "/100")
-                
-                # Exibir insights se existirem
-                if analysis.get("insights"):
-                    st.subheader("Dicas de Melhoria:")
-                    for insight in analysis["insights"]:
-                        st.write(f"- {insight}")
+    json_files = sorted(json_files, reverse=True)
+    for json_file in json_files:
+        json_path = os.path.join(results_dir, json_file)
+        with open(json_path, "r", encoding="utf-8") as f:
+            analysis = json.load(f)
+        # Fallback para score antigo
+        score = analysis.get('score_geral')
+        if score is None:
+            score = analysis.get('score')
+        # Corrigir score para percentual inteiro
+        if score is not None:
+            try:
+                score_float = float(score)
+                if score_float <= 1.0:
+                    score = int(round(score_float * 100))
                 else:
-                    st.info("Nenhuma dica de melhoria disponível para esta análise.")
-                
-                # Exibir vídeos (opcional, se quiser reexibir no histórico)
-                user_hist_video_path = os.path.join(folder_path, "user.mp4")
-                ref_hist_video_path = os.path.join(folder_path, "ref.mp4")
-                
-                if os.path.exists(user_hist_video_path) and os.path.exists(ref_hist_video_path):
-                    st.subheader("Vídeos da Análise:")
-                    col_hist1, col_hist2 = st.columns(2)
-                    with col_hist1:
-                        st.video(user_hist_video_path)
-                        st.caption("Seu Vídeo")
-                    with col_hist2:
-                        st.video(ref_hist_video_path)
-                        st.caption("Vídeo de Referência")
-                        
+                    score = int(round(score_float))
+            except Exception:
+                score = '-'  # fallback se não for número
+        else:
+            score = '-'
+        resumo = f"{analysis.get('data', '')[:19]} | Score: {score} | Movimento: {analysis.get('movimento', '-')}"
+        with st.expander(f"Ver Histórico: {resumo}"):
+            st.json(analysis)
+
 def main():
     st.set_page_config(page_title="Análise de Movimento de Basquete", layout="wide")
     st.title("🏀 Análise de Movimento de Basquete")
