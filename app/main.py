@@ -766,6 +766,50 @@ def main():
                     # 4. Ranking das 3 partes com maior erro
                     partes_criticas = sorted(erro_medio_por_parte.items(), key=lambda x: x[1], reverse=True)[:3]
                     # 5. Exibir ranking visual
+                    # --- Momentos Críticos do Movimento ---
+                    st.markdown("### 📸 Momentos Críticos do Movimento")
+                    frames_criticos = resultados.get('frames_criticos', [])
+                    erros_por_frame = [np.mean(np.abs(user_kp[i] - ref_kp[i])) for i in range(n_frames)]
+                    results_dir = os.path.join("app", "results", nome_usuario)
+                    col1, col2, col3 = st.columns(3)
+                    partes_criticas_nomes = [p[0] for p in partes_criticas]
+                    for i, idx in enumerate(frames_criticos[:3]):
+                        erro_total = erros_por_frame[idx] if idx < len(erros_por_frame) else None
+                        # Exibir erro das mesmas partes críticas do ranking global
+                        partes_frame = {}
+                        for parte in partes_criticas_nomes:
+                            peso = pesos_partes[parte]
+                            indices = indices_partes[parte]
+                            if parte_tem_movimento(user_kp[idx], indices):
+                                soma = 0
+                                count = 0
+                                for idx_kp in indices:
+                                    if idx_kp < user_kp.shape[1] and idx_kp < ref_kp.shape[1]:
+                                        dist = np.linalg.norm(user_kp[idx, idx_kp] - ref_kp[idx, idx_kp])
+                                        if not np.isnan(dist):
+                                            soma += dist
+                                            count += 1
+                                if count:
+                                    partes_frame[parte] = (soma / count) * peso
+                            else:
+                                partes_frame[parte] = 0.0
+                        partes_str = ', '.join([f"{parte}: {partes_frame[parte]:.2f}" for parte in partes_criticas_nomes])
+                        # Salvar imagem do frame crítico com esqueleto
+                        img_path = os.path.join(results_dir, f"frame_critico_{idx}.png")
+                        save_skeleton_frame(user_path, idx, img_path)
+                        # Exibir na coluna
+                        col = [col1, col2, col3][i]
+                        with col:
+                            st.markdown(f"""
+                            <div style='text-align:center; font-size:22px; font-weight:bold;'>📍 Erro Crítico #{i+1}</div>
+                            <div style='text-align:center; font-size:16px;'>🕒 Frame {idx} | Erro Total: {erro_total:.2f}</div>
+                            <div style='text-align:center; font-size:16px;'>🦵 Partes com maior erro médio: {partes_str}</div>
+                            """, unsafe_allow_html=True)
+                            if os.path.exists(img_path):
+                                st.image(img_path, caption=f"Frame {idx}", use_container_width=True)
+                            else:
+                                st.info("Imagem não disponível.")
+                    # --- Partes com Maior Erro no Movimento ---
                     with st.container():
                         st.markdown("""
                         <h3 style='color:#ff4d4d; font-weight:700;'>❗ Partes com Maior Erro no Movimento</h3>
@@ -788,82 +832,15 @@ def main():
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
-                    # --- Momentos Críticos do Movimento ---
-                    st.markdown("### 📸 Momentos Críticos do Movimento")
-                    frames_criticos = resultados.get('frames_criticos', [])
-                    erros_por_frame = [np.mean(np.abs(user_kp[i] - ref_kp[i])) for i in range(n_frames)]
-                    results_dir = os.path.join("app", "results", nome_usuario)
-                    col1, col2, col3 = st.columns(3)
-                    for i, idx in enumerate(frames_criticos[:3]):
-                        erro_total = erros_por_frame[idx] if idx < len(erros_por_frame) else None
-                        # Calcular partes com maior erro naquele frame (usando mesma lógica e pesos)
-                        partes_frame = {}
-                        for parte, peso in pesos_partes.items():
-                            indices = indices_partes[parte]
-                            if parte_tem_movimento(user_kp[idx], indices):
-                                soma = 0
-                                count = 0
-                                for idx_kp in indices:
-                                    if idx_kp < user_kp.shape[1] and idx_kp < ref_kp.shape[1]:
-                                        dist = np.linalg.norm(user_kp[idx, idx_kp] - ref_kp[idx, idx_kp])
-                                        if not np.isnan(dist):
-                                            soma += dist
-                                            count += 1
-                                if count:
-                                    partes_frame[parte] = (soma / count) * peso
-                        top_partes = sorted(partes_frame.items(), key=lambda x: x[1], reverse=True)[:2]
-                        top_partes_str = ', '.join([p[0] for p in top_partes])
-                        # Salvar imagem do frame crítico com esqueleto
-                        img_path = os.path.join(results_dir, f"frame_critico_{idx}.png")
-                        save_skeleton_frame(user_path, idx, img_path)
-                        # Exibir na coluna
-                        col = [col1, col2, col3][i]
-                        with col:
-                            st.markdown(f"""
-                            <div style='text-align:center; font-size:22px; font-weight:bold;'>📍 Erro Crítico #{i+1}</div>
-                            <div style='text-align:center; font-size:16px;'>🕒 Frame {idx} | Erro Total: {erro_total:.2f}</div>
-                            <div style='text-align:center; font-size:16px;'>🦵 Partes com maior erro: {top_partes_str}</div>
-                            """, unsafe_allow_html=True)
-                            if os.path.exists(img_path):
-                                st.image(img_path, caption=f"Frame {idx}", use_container_width=True)
-                            else:
-                                st.info("Imagem não disponível.")
-
-                    # Seção de download
-                    st.markdown("## 📥 Download do Resultado")
-                    usuario_nome = nome_usuario
-                    data_str = resultados.get('data', '').replace(':', '-').replace(' ', '_')
-                    results_dir = os.path.join("app", "results", usuario_nome)
-                    json_path = os.path.join(results_dir, f"{usuario_nome}_analise_{data_str}.json")
-                    png_path = os.path.join(results_dir, f"{usuario_nome}_analise_{data_str}.png")
-                    video_path = os.path.join(results_dir, "user.mp4")  # ou outro nome se gerar vídeo com overlay
-
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        if os.path.exists(json_path):
-                            with open(json_path, "r", encoding="utf-8") as f:
-                                st.download_button("📄 Baixar dados (.json)", f, file_name=os.path.basename(json_path), mime="application/json")
-                        else:
-                            st.info("Arquivo JSON não encontrado.")
-                    with col2:
-                        if os.path.exists(png_path):
-                            with open(png_path, "rb") as f:
-                                st.download_button("🖼️ Baixar imagem (.png)", f, file_name=os.path.basename(png_path), mime="image/png")
-                        else:
-                            st.info("Imagem PNG não disponível.")
-                    with col3:
-                        if os.path.exists(video_path):
-                            with open(video_path, "rb") as f:
-                                st.download_button("🎥 Baixar vídeo com esqueleto", f, file_name=os.path.basename(video_path), mime="video/mp4")
             else:
-                            st.info("Vídeo não disponível.")
+                st.info("Vídeo não disponível.")
         elif not (user_video and ref_video and nome_usuario and tipo_movimento):
             st.info("📝 Preencha todos os campos, aceite os termos e faça upload dos dois vídeos para liberar a visualização e análise.")
 
     with tab2:
         st.header("4️⃣ Histórico de Análises")
         st.markdown("Consulte análises anteriores realizadas neste sistema.")
-        display_analysis_history()
+    display_analysis_history()
 
 def test_analysis():
     """
