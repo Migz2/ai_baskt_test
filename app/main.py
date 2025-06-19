@@ -592,6 +592,7 @@ def main():
     # Marca e subtítulo
     st.markdown("<h1 style='text-align: center; font-size: 52px; font-weight: bold;'>Obsess.</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; font-weight: 400;'>🏀 Análise de Movimento de Basquete</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: red;'>Ainda estamos em fase teste</p>", unsafe_allow_html=True)
 
     # Expander com os Termos de Uso
     with st.expander("📄 Termos de Uso, Privacidade e Consentimento", expanded=False):
