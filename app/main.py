@@ -12,6 +12,7 @@ import mediapipe as mp
 import cv2
 from body_analysis import analyze_body_parts, generate_insights
 import time
+from terms import terms_text
 
 def analisar_video_referencia(video_path):
     """
@@ -602,14 +603,23 @@ def main():
     # Marca e subtítulo
     st.markdown("<h1 style='text-align: center; font-size: 52px; font-weight: bold;'>Obsess.</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; font-weight: 400;'>🏀 Análise de Movimento de Basquete</h3>", unsafe_allow_html=True)
-    
+
+    # Expander com os Termos de Uso
+    with st.expander("📄 Termos de Uso, Privacidade e Consentimento", expanded=False):
+        st.markdown(terms_text)
+
     # Campo para nome do usuário (antes de tudo)
     usuario_nome = st.text_input("Digite seu nome ou apelido para salvar seu histórico:")
     if not usuario_nome:
         st.warning("Por favor, digite seu nome para continuar.")
         st.stop()
     st.session_state["usuario"] = usuario_nome
-    
+
+    # Checkbox de consentimento
+    consentimento = st.checkbox("✅ Li e concordo com os termos de uso e política de privacidade.")
+    if not consentimento:
+        st.info("Você deve concordar com os termos para enviar vídeos e realizar análises.")
+
     # Seções principais
     tab1, tab2 = st.tabs(["Análise do Movimento", "Histórico de Análises"])
 
@@ -630,18 +640,20 @@ def main():
             user_video = st.file_uploader(
                 "Envie seu vídeo",
                 type=["mp4", "mov"],
-                help="Faça upload do vídeo do seu movimento para análise"
+                help="Faça upload do vídeo do seu movimento para análise",
+                disabled=not consentimento
             )
-            if user_video:
+            if user_video and consentimento:
                 st.success("✅ Vídeo do usuário carregado com sucesso!")
         with col2:
             st.subheader("Movimento de Referência")
             ref_video = st.file_uploader(
                 "Envie o vídeo de referência",
                 type=["mp4", "mov"],
-                help="Faça upload do vídeo que servirá como referência para a análise"
+                help="Faça upload do vídeo que servirá como referência para a análise",
+                disabled=not consentimento
             )
-            if ref_video:
+            if ref_video and consentimento:
                 st.success("✅ Vídeo de referência carregado com sucesso!")
         
         # Validação automática do tipo de movimento
@@ -668,7 +680,7 @@ def main():
                 if reenviar:
                     st.experimental_rerun()
         
-        if user_video and ref_video and nome_usuario and tipo_movimento and validado:
+        if user_video and ref_video and nome_usuario and tipo_movimento and validado and consentimento:
             # Visualização e análise só se validado
             if not st.session_state.videos_exibidos:
                 st.header("2️⃣ Visualização dos Movimentos com Esqueleto")
@@ -794,7 +806,7 @@ def main():
                             <div style='text-align:center; font-size:16px;'>🦵 Partes com maior erro: {top_partes_str}</div>
                             """, unsafe_allow_html=True)
                             if os.path.exists(img_path):
-                                st.image(img_path, caption=f"Frame {idx}", use_column_width=True)
+                                st.image(img_path, caption=f"Frame {idx}", use_container_width=True)
                             else:
                                 st.info("Imagem não disponível.")
 
@@ -827,7 +839,7 @@ def main():
             else:
                             st.info("Vídeo não disponível.")
         elif not (user_video and ref_video and nome_usuario and tipo_movimento):
-            st.info("📝 Preencha todos os campos e faça upload dos dois vídeos para liberar a visualização e análise.")
+            st.info("📝 Preencha todos os campos, aceite os termos e faça upload dos dois vídeos para liberar a visualização e análise.")
 
     with tab2:
         st.header("4️⃣ Histórico de Análises")
