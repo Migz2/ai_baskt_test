@@ -675,11 +675,13 @@ def main():
                 fps_temp = user_cap_temp.get(cv2.CAP_PROP_FPS)
                 frame_saida_bola_temp = detectar_frame_saida_bola(user_keypoints_temp, fps_temp)
                 user_cap_temp.release()
-                col_vid1, col_vid2 = st.columns(2)
-                with col_vid1:
-                    draw_pose_on_video(user_path, st.container(), "Seu Movimento (com esqueleto)", frame_limit=frame_saida_bola_temp)
-                with col_vid2:
-                    draw_pose_on_video(ref_path, st.container(), "Referência (com esqueleto)", frame_limit=frame_saida_bola_temp)
+                # Se já houver análise, tente recuperar frames críticos
+                frames_criticos = None
+                if 'resultados_analise' in st.session_state:
+                    resultados = st.session_state['resultados_analise']
+                    frames_criticos = resultados.get('frames_criticos', None)
+                # Visualização lado a lado com destaque
+                render_side_by_side_with_skeletons(user_path, ref_path, highlighted_frames=frames_criticos)
                 st.session_state.videos_exibidos = True
             # Botão para iniciar análise
             st.header("3️⃣ Score e Feedback do Movimento")
@@ -688,6 +690,7 @@ def main():
                 st.subheader("📈 Análise do Seu Movimento")
                 resultados = analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento)
                 if resultados:
+                    st.session_state['resultados_analise'] = resultados
                     st.success("✅ Análise concluída com sucesso!")
                     st.subheader("📊 Resultados da Análise")
                     st.json(resultados)

@@ -57,7 +57,7 @@ def draw_skeleton_on_video(video_path):
     cap.release()
     return processed_frames
 
-def render_side_by_side_with_skeletons(user_path, ref_path):
+def render_side_by_side_with_skeletons(user_path, ref_path, highlighted_frames=None):
     # Processar ambos os vídeos
     user_frames = draw_skeleton_on_video(user_path)
     ref_frames = draw_skeleton_on_video(ref_path)
@@ -74,9 +74,10 @@ def render_side_by_side_with_skeletons(user_path, ref_path):
     
     # Criar placeholder para a animação
     frame_placeholder = st.empty()
+    label_placeholder = st.empty()
     
     # Exibir frames lado a lado
-    for user_frame, ref_frame in zip(user_frames, ref_frames):
+    for idx, (user_frame, ref_frame) in enumerate(zip(user_frames, ref_frames)):
         # Redimensionar frames para terem a mesma altura
         height = min(user_frame.shape[0], ref_frame.shape[0])
         user_frame = cv2.resize(user_frame, (int(user_frame.shape[1] * height/user_frame.shape[0]), height))
@@ -84,6 +85,21 @@ def render_side_by_side_with_skeletons(user_path, ref_path):
         
         # Juntar frames horizontalmente
         combined_frame = np.hstack((user_frame, ref_frame))
+        
+        # Se for frame crítico, desenhar borda vermelha luminosa
+        if highlighted_frames and idx in highlighted_frames:
+            border_thickness = 16
+            # Usar vermelho puro e "luz" (BGR para OpenCV)
+            border_color = (0, 0, 255)  # BGR (vermelho puro)
+            combined_frame = cv2.copyMakeBorder(
+                combined_frame,
+                border_thickness, border_thickness, border_thickness, border_thickness,
+                cv2.BORDER_CONSTANT, value=border_color
+            )
+            # Exibir rótulo acima do frame (markdown visível)
+            st.markdown(f"<div style='text-align:center; color:#ff3333; font-size:28px; font-weight:bold; margin-bottom:8px;'>🔴 Alto erro aqui! (Frame {idx})</div>", unsafe_allow_html=True)
+        else:
+            label_placeholder.markdown("")
         
         # Converter para PIL Image
         pil_image = Image.fromarray(combined_frame)
