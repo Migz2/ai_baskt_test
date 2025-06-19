@@ -1,6 +1,6 @@
 import streamlit as st
 from analysis import analisar_movimento
-from skeleton_visualizer import render_side_by_side_with_skeletons
+from skeleton_visualizer import render_side_by_side_with_skeletons, save_skeleton_frame
 from feedback import analyze_errors_by_body_part, generate_feedback
 import numpy as np
 import os
@@ -555,8 +555,12 @@ def display_analysis_history():
     json_files = sorted(json_files, reverse=True)
     for json_file in json_files:
         json_path = os.path.join(results_dir, json_file)
-        with open(json_path, "r", encoding="utf-8") as f:
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
                 analysis = json.load(f)
+        except Exception as e:
+            st.warning(f"Arquivo corrompido ou inválido: {json_path}. Erro: {e}")
+            continue
         score = analysis.get('score_geral')
         if score is None:
             score = analysis.get('score')
@@ -748,6 +752,52 @@ def main():
                             </div>
                             """, unsafe_allow_html=True)
 
+                    # NOVO: Exibir Momentos Críticos do Movimento
+                    st.markdown("### 📸 Momentos Críticos do Movimento")
+                    frames_criticos = resultados.get('frames_criticos', [])
+                    erros_por_frame = [np.mean(np.abs(user_kp[i] - ref_kp[i])) for i in range(len(user_kp))]
+                    results_dir = os.path.join("app", "results", nome_usuario)
+                    col1, col2, col3 = st.columns(3)
+                    for i, idx in enumerate(frames_criticos[:3]):
+                        erro_total = erros_por_frame[idx] if idx < len(erros_por_frame) else None
+                        # Calcular partes com maior erro naquele frame
+                        partes_frame = {}
+                        partes_corpo = {
+                            "Braço Direito": [12, 14, 16],
+                            "Braço Esquerdo": [11, 13, 15],
+                            "Perna Direita": [24, 26, 28],
+                            "Perna Esquerda": [23, 25, 27],
+                            "Tronco": [11, 12, 23, 24],
+                            "Cabeça": [0],
+                        }
+                        for parte, indices in partes_corpo.items():
+                            soma = 0
+                            count = 0
+                            for idx_kp in indices:
+                                if idx_kp < user_kp.shape[1] and idx_kp < ref_kp.shape[1]:
+                                    dist = np.linalg.norm(user_kp[idx, idx_kp] - ref_kp[idx, idx_kp])
+                                    if not np.isnan(dist):
+                                        soma += dist
+                                        count += 1
+                            partes_frame[parte] = soma / count if count else 0
+                        top_partes = sorted(partes_frame.items(), key=lambda x: x[1], reverse=True)[:2]
+                        top_partes_str = ', '.join([p[0] for p in top_partes])
+                        # Salvar imagem do frame crítico com esqueleto
+                        img_path = os.path.join(results_dir, f"frame_critico_{idx}.png")
+                        save_skeleton_frame(user_path, idx, img_path)
+                        # Exibir na coluna
+                        col = [col1, col2, col3][i]
+                        with col:
+                            st.markdown(f"""
+                            <div style='text-align:center; font-size:22px; font-weight:bold;'>📍 Erro Crítico #{i+1}</div>
+                            <div style='text-align:center; font-size:16px;'>🕒 Frame {idx} | Erro Total: {erro_total:.2f}</div>
+                            <div style='text-align:center; font-size:16px;'>🦵 Partes com maior erro: {top_partes_str}</div>
+                            """, unsafe_allow_html=True)
+                            if os.path.exists(img_path):
+                                st.image(img_path, caption=f"Frame {idx}", use_column_width=True)
+                            else:
+                                st.info("Imagem não disponível.")
+
                     # Seção de download
                     st.markdown("## 📥 Download do Resultado")
                     usuario_nome = nome_usuario
@@ -782,7 +832,7 @@ def main():
     with tab2:
         st.header("4️⃣ Histórico de Análises")
         st.markdown("Consulte análises anteriores realizadas neste sistema.")
-        display_analysis_history()
+    display_analysis_history()
 
 def test_analysis():
     """
