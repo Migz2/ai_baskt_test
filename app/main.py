@@ -397,6 +397,25 @@ def draw_pose_on_video(video_path, container, title):
     cap.release()
     pose.close()
 
+def generate_tiered_feedback(part_errors, limiar=0.1):
+    """
+    Gera feedback priorizado por partes do corpo usando tiers S, A, B.
+    Tier S: maior diferença, Tier A: média, Tier B: menor diferença relevante.
+    """
+    if not part_errors:
+        return ["Movimento muito próximo do ideal! Parabéns!"]
+    # Ordenar partes do corpo por erro (maior para menor)
+    sorted_parts = sorted(part_errors.items(), key=lambda x: x[1], reverse=True)
+    feedback = []
+    # Definir tiers
+    if len(sorted_parts) > 0 and sorted_parts[0][1] > limiar:
+        feedback.append(f"🔥 [Tier S] {sorted_parts[0][0].capitalize()}: diferença crítica em relação à referência.")
+    if len(sorted_parts) > 1 and sorted_parts[1][1] > limiar/2:
+        feedback.append(f"⚠️ [Tier A] {sorted_parts[1][0].capitalize()}: diferença intermediária, atenção!")
+    if len(sorted_parts) > 2 and sorted_parts[2][1] > limiar/4:
+        feedback.append(f"🔹 [Tier B] {sorted_parts[2][0].capitalize()}: diferença menor, mas pode ser ajustada.")
+    return feedback
+
 def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
     # Verificar se os arquivos existem
     if not os.path.exists(user_path) or not os.path.exists(ref_path):
@@ -428,19 +447,19 @@ def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
     
     # Gerar insights
     insights = generate_insights(part_errors)
+    # Gerar feedback por tier
+    tiered_feedback = generate_tiered_feedback(part_errors)
     
-    # Exibir insights (alertas de correção) em um quadro único
-    if insights:
-        st.subheader("📝 Feedback do Movimento")
-        feedback_text = "### 🎯 Pontos de Atenção\n\n"
-        for i, tip_message in enumerate(insights, 1):
-            feedback_text += f"**{i}. {tip_message}**\n\n"
+    # Exibir apenas o feedback por tier
+    if tiered_feedback:
+        st.subheader("📝 Pontos de Atenção")
+        feedback_text = "\n".join(tiered_feedback)
         if score >= 85:
-            feedback_text += "\n### 🌟 Excelente!\nSeu movimento está muito próximo do ideal! Continue praticando para manter a consistência."
+            feedback_text += "\n\n### 🌟 Excelente!\nSeu movimento está muito próximo do ideal! Continue praticando para manter a consistência."
         elif score >= 60:
-            feedback_text += "\n### 💪 Bom trabalho!\nVocê está no caminho certo! Foque nos ajustes sugeridos para melhorar ainda mais."
+            feedback_text += "\n\n### 💪 Bom trabalho!\nVocê está no caminho certo! Foque nos ajustes sugeridos para melhorar ainda mais."
         else:
-            feedback_text += "\n### 🔄 Continue praticando!\nNão desanime! Cada tentativa é uma oportunidade de aprendizado. Foque nos ajustes sugeridos."
+            feedback_text += "\n\n### 🔄 Continue praticando!\nNão desanime! Cada tentativa é uma oportunidade de aprendizado. Foque nos ajustes sugeridos."
         st.markdown(feedback_text)
     
     # Criar timestamp para nomear a pasta
@@ -497,7 +516,7 @@ def display_analysis_history():
                 else:
                     score = int(round(score_float))
             except Exception:
-                score = '-'  # fallback se não for número
+                score = '-'
         else:
             score = '-'
         resumo = f"{analysis.get('data', '')[:19]} | Score: {score} | Movimento: {analysis.get('movimento', '-')}"
@@ -517,7 +536,10 @@ def main():
         
         # Inputs do usuário
         nome_usuario = st.text_input("Nome do usuário")
-        tipo_movimento = st.text_input("Tipo do movimento (ex: arremesso, bandeja, etc.)")
+        tipo_movimento = st.selectbox(
+            "Qual movimento está sendo analisado?",
+            ["arremesso parado", "drible", "bandeja"]
+        )
         
         col1, col2 = st.columns(2)
         with col1:
