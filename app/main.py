@@ -358,21 +358,19 @@ def extract_keypoints(video_path):
         return None
     return np.array(keypoints)
 
-def detectar_frame_saida_bola(keypoints_usuario, fps, segundos_fallback=2):
+def detectar_frame_saida_bola(keypoints_usuario, threshold=0.08, segundos_fallback=2, fps=30):
     """
     Detecta o frame em que a bola sai da mão do jogador.
-    Como não há keypoints da bola, usa a posição da mão (punho direito, índice 16) e verifica mudança brusca de posição Y.
+    Heurística: considera saída quando o deslocamento do punho direito (keypoint 16) aumenta abruptamente.
     Se não detectar, retorna o frame correspondente a 'segundos_fallback'.
     """
-    # Usar punho direito (índice 16) como proxy
-    pos_mao = keypoints_usuario[:, 16, 1]  # eixo Y
-    diffs = abs(np.diff(pos_mao))
-    # Detectar mudança brusca (threshold empírico)
-    threshold = 0.08
+    if keypoints_usuario is None or len(keypoints_usuario) < 2:
+        return int(fps * segundos_fallback)
+    pos_mao = keypoints_usuario[:, 16, :2]  # (x, y) do punho direito
+    diffs = np.linalg.norm(np.diff(pos_mao, axis=0), axis=1)
     for i, d in enumerate(diffs):
         if d > threshold:
             return i + 1  # frame após a mudança
-    # Fallback: 2 segundos
     return int(fps * segundos_fallback)
 
 def draw_pose_on_video(video_path, container, title, frame_limit=None):
@@ -455,14 +453,19 @@ def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
         st.error("❌ Erro ao extrair keypoints dos vídeos!")
         return None
     
-    # Detectar frame de saída da bola
+    # Detectar frame de saída da bola em ambos os vídeos
     user_cap = cv2.VideoCapture(user_path)
-    fps = user_cap.get(cv2.CAP_PROP_FPS)
-    frame_saida_bola = detectar_frame_saida_bola(user_keypoints, fps)
+    fps_user = user_cap.get(cv2.CAP_PROP_FPS)
+    frame_saida_bola_user = detectar_frame_saida_bola(user_keypoints, fps=fps_user)
     user_cap.release()
-    # Cortar os keypoints até esse frame
-    user_keypoints = user_keypoints[:frame_saida_bola]
-    ref_keypoints = ref_keypoints[:frame_saida_bola]
+    ref_cap = cv2.VideoCapture(ref_path)
+    fps_ref = ref_cap.get(cv2.CAP_PROP_FPS)
+    frame_saida_bola_ref = detectar_frame_saida_bola(ref_keypoints, fps=fps_ref)
+    ref_cap.release()
+    # Cortar ambos até o menor frame de saída
+    frame_limite = min(frame_saida_bola_user, frame_saida_bola_ref)
+    user_keypoints = user_keypoints[:frame_limite]
+    ref_keypoints = ref_keypoints[:frame_limite]
     
     # Calcular erro por frame
     erros_por_frame = [np.mean(np.abs(user_keypoints[i] - ref_keypoints[i])) for i in range(len(user_keypoints))]
@@ -722,10 +725,11 @@ def main():
                             "Cabeça": [0],
                         }
                         erros_por_parte = {}
+                        n_frames = min(len(user_kp), len(ref_kp))
                         for parte, indices in partes_corpo.items():
                             soma = 0
                             count = 0
-                            for i in range(len(user_kp)):
+                            for i in range(n_frames):
                                 for idx in indices:
                                     if idx < user_kp.shape[1] and idx < ref_kp.shape[1]:
                                         dist = np.linalg.norm(user_kp[i, idx] - ref_kp[i, idx])
@@ -844,7 +848,7 @@ def main():
     with tab2:
         st.header("4️⃣ Histórico de Análises")
         st.markdown("Consulte análises anteriores realizadas neste sistema.")
-    display_analysis_history()
+        display_analysis_history()
 
 def test_analysis():
     """
