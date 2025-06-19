@@ -357,9 +357,27 @@ def extract_keypoints(video_path):
         return None
     return np.array(keypoints)
 
-def draw_pose_on_video(video_path, container, title):
+def detectar_frame_saida_bola(keypoints_usuario, fps, segundos_fallback=2):
+    """
+    Detecta o frame em que a bola sai da mão do jogador.
+    Como não há keypoints da bola, usa a posição da mão (punho direito, índice 16) e verifica mudança brusca de posição Y.
+    Se não detectar, retorna o frame correspondente a 'segundos_fallback'.
+    """
+    # Usar punho direito (índice 16) como proxy
+    pos_mao = keypoints_usuario[:, 16, 1]  # eixo Y
+    diffs = abs(np.diff(pos_mao))
+    # Detectar mudança brusca (threshold empírico)
+    threshold = 0.08
+    for i, d in enumerate(diffs):
+        if d > threshold:
+            return i + 1  # frame após a mudança
+    # Fallback: 2 segundos
+    return int(fps * segundos_fallback)
+
+def draw_pose_on_video(video_path, container, title, frame_limit=None):
     """
     Exibe o vídeo com esqueleto desenhado frame a frame em um container Streamlit.
+    Se frame_limit for definido, para a renderização nesse frame.
     """
     mp_pose = mp.solutions.pose
     mp_drawing = mp.solutions.drawing_utils
@@ -376,6 +394,8 @@ def draw_pose_on_video(video_path, container, title):
     video_frame = container.empty()
     container.caption(title)
     while True:
+        if frame_limit and frame_count >= frame_limit:
+            break
         ret, frame = cap.read()
         if not ret:
             break
@@ -429,6 +449,15 @@ def analyze_and_visualize(user_path, ref_path, nome_usuario, tipo_movimento):
     if user_keypoints is None or ref_keypoints is None:
         st.error("❌ Erro ao extrair keypoints dos vídeos!")
         return None
+    
+    # Detectar frame de saída da bola
+    user_cap = cv2.VideoCapture(user_path)
+    fps = user_cap.get(cv2.CAP_PROP_FPS)
+    frame_saida_bola = detectar_frame_saida_bola(user_keypoints, fps)
+    user_cap.release()
+    # Cortar os keypoints até esse frame
+    user_keypoints = user_keypoints[:frame_saida_bola]
+    ref_keypoints = ref_keypoints[:frame_saida_bola]
     
     # Calcular score de similaridade
     score = calculate_similarity(user_keypoints, ref_keypoints)
@@ -506,7 +535,7 @@ def display_analysis_history():
     for json_file in json_files:
         json_path = os.path.join(results_dir, json_file)
         with open(json_path, "r", encoding="utf-8") as f:
-            analysis = json.load(f)
+                analysis = json.load(f)
         score = analysis.get('score_geral')
         if score is None:
             score = analysis.get('score')
@@ -616,11 +645,17 @@ def main():
             # Visualização e análise só se validado
             st.header("2️⃣ Visualização dos Movimentos com Esqueleto")
             st.markdown("Veja lado a lado o seu movimento e o de referência, ambos com o esqueleto desenhado.")
+            # Detectar frame de saída da bola para limitar visualização
+            user_keypoints_temp = extract_keypoints(user_path)
+            user_cap_temp = cv2.VideoCapture(user_path)
+            fps_temp = user_cap_temp.get(cv2.CAP_PROP_FPS)
+            frame_saida_bola_temp = detectar_frame_saida_bola(user_keypoints_temp, fps_temp)
+            user_cap_temp.release()
             col_vid1, col_vid2 = st.columns(2)
             with col_vid1:
-                draw_pose_on_video(user_path, st.container(), "Seu Movimento (com esqueleto)")
+                draw_pose_on_video(user_path, st.container(), "Seu Movimento (com esqueleto)", frame_limit=frame_saida_bola_temp)
             with col_vid2:
-                draw_pose_on_video(ref_path, st.container(), "Referência (com esqueleto)")
+                draw_pose_on_video(ref_path, st.container(), "Referência (com esqueleto)", frame_limit=frame_saida_bola_temp)
             
             # Botão para iniciar análise
             st.header("3️⃣ Score e Feedback do Movimento")
@@ -659,15 +694,15 @@ def main():
                         if os.path.exists(video_path):
                             with open(video_path, "rb") as f:
                                 st.download_button("🎥 Baixar vídeo com esqueleto", f, file_name=os.path.basename(video_path), mime="video/mp4")
-                        else:
+            else:
                             st.info("Vídeo não disponível.")
         elif not (user_video and ref_video and nome_usuario and tipo_movimento):
             st.info("📝 Preencha todos os campos e faça upload dos dois vídeos para liberar a visualização e análise.")
-    
+
     with tab2:
         st.header("4️⃣ Histórico de Análises")
         st.markdown("Consulte análises anteriores realizadas neste sistema.")
-        display_analysis_history()
+    display_analysis_history()
 
 def test_analysis():
     """
