@@ -57,7 +57,7 @@ def draw_skeleton_on_video(video_path):
     cap.release()
     return processed_frames
 
-def render_side_by_side_with_skeletons(user_path, ref_path):
+def render_side_by_side_with_skeletons(user_path, ref_path, highlighted_frames=None):
     # Processar ambos os vídeos
     user_frames = draw_skeleton_on_video(user_path)
     ref_frames = draw_skeleton_on_video(ref_path)
@@ -74,9 +74,10 @@ def render_side_by_side_with_skeletons(user_path, ref_path):
     
     # Criar placeholder para a animação
     frame_placeholder = st.empty()
+    label_placeholder = st.empty()
     
     # Exibir frames lado a lado
-    for user_frame, ref_frame in zip(user_frames, ref_frames):
+    for idx, (user_frame, ref_frame) in enumerate(zip(user_frames, ref_frames)):
         # Redimensionar frames para terem a mesma altura
         height = min(user_frame.shape[0], ref_frame.shape[0])
         user_frame = cv2.resize(user_frame, (int(user_frame.shape[1] * height/user_frame.shape[0]), height))
@@ -84,6 +85,21 @@ def render_side_by_side_with_skeletons(user_path, ref_path):
         
         # Juntar frames horizontalmente
         combined_frame = np.hstack((user_frame, ref_frame))
+        
+        # Se for frame crítico, desenhar borda vermelha luminosa
+        if highlighted_frames and idx in highlighted_frames:
+            border_thickness = 16
+            # Usar vermelho puro e "luz" (BGR para OpenCV)
+            border_color = (0, 0, 255)  # BGR (vermelho puro)
+            combined_frame = cv2.copyMakeBorder(
+                combined_frame,
+                border_thickness, border_thickness, border_thickness, border_thickness,
+                cv2.BORDER_CONSTANT, value=border_color
+            )
+            # Exibir rótulo acima do frame (markdown visível)
+            st.markdown(f"<div style='text-align:center; color:#ff3333; font-size:28px; font-weight:bold; margin-bottom:8px;'>🔴 Alto erro aqui! (Frame {idx})</div>", unsafe_allow_html=True)
+        else:
+            label_placeholder.markdown("")
         
         # Converter para PIL Image
         pil_image = Image.fromarray(combined_frame)
@@ -120,3 +136,38 @@ def render_side_by_side(user_video, reference_video):
         # Exibir frame combinado
         frame_placeholder.image(combined_frame, channels="RGB")
         time.sleep(0.03)  # Aproximadamente 30 FPS 
+
+def save_skeleton_frame(video_path, frame_idx, save_path):
+    """
+    Salva um frame específico do vídeo com o esqueleto desenhado no caminho save_path.
+    """
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return False
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+    ret, frame = cap.read()
+    if not ret:
+        cap.release()
+        return False
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    with mp_pose.Pose(static_image_mode=True, min_detection_confidence=0.1) as pose:
+        results = pose.process(frame)
+        if results.pose_landmarks:
+            h, w, _ = frame.shape
+            # Desenhar pontos
+            for lm in results.pose_landmarks.landmark:
+                cx, cy = int(lm.x * w), int(lm.y * h)
+                cv2.circle(frame, (cx, cy), 4, (245, 117, 66), -1)
+            # Desenhar conexões
+            for connection in POSE_CONNECTIONS:
+                start_idx, end_idx = connection
+                start = results.pose_landmarks.landmark[start_idx]
+                end = results.pose_landmarks.landmark[end_idx]
+                x1, y1 = int(start.x * w), int(start.y * h)
+                x2, y2 = int(end.x * w), int(end.y * h)
+                cv2.line(frame, (x1, y1), (x2, y2), (245, 66, 230), 4)
+    cap.release()
+    # Salvar imagem
+    img = Image.fromarray(frame)
+    img.save(save_path)
+    return True 
