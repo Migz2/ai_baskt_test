@@ -1,0 +1,48 @@
+# Ambiente virtual Python
+.venv/
+venv/
+ENV/
+
+# Arquivos Python compilados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribuição / empacotamento
+dist/
+build/
+*.egg-info/
+
+# Arquivos de ambiente
+.env
+.env.local
+.env.*.local
+
+# Arquivos de IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos de log
+*.log
+
+# Arquivos de mídia e uploads
+app/uploads/*
+!app/uploads/.gitkeep
+app/videos/*
+!app/videos/.gitkeep
+
+# Arquivos de dados temporários
+*.npy
+*.npz
+app/keypoints_data/*
+!app/keypoints_data/.gitkeep
+
+# Arquivos de resultados
+app/results/*
+!app/results/.gitkeep 
